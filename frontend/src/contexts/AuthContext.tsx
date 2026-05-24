@@ -57,13 +57,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // On web, after Google redirect we land back here with #session_id=... or ?session_id=...
+  // Process it BEFORE checking existing session.
+  const consumeWebSessionId = useCallback(async (): Promise<boolean> => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return false;
+    const hash = window.location.hash || "";
+    const search = window.location.search || "";
+    let sid: string | null = null;
+    if (hash.includes("session_id=")) {
+      sid = new URLSearchParams(hash.replace(/^#/, "")).get("session_id");
+    } else if (search.includes("session_id=")) {
+      sid = new URLSearchParams(search).get("session_id");
+    }
+    if (!sid) return false;
+    try {
+      const res = await api<{ token: string; user: User }>("/auth/google/session", {
+        method: "POST",
+        body: { session_token: sid },
+        auth: false,
+      });
+      await setToken(res.token);
+      setUserState(res.user);
+      // Clean the URL so it's not re-processed
+      window.history.replaceState(null, "", window.location.pathname);
+      return true;
+    } catch (e) {
+      console.warn("Google session exchange failed", e);
+      window.history.replaceState(null, "", window.location.pathname);
+      return false;
+    }
+  }, []);
+
   useEffect(() => {
     (async () => {
       setLoading(true);
-      await refresh();
+      const consumed = await consumeWebSessionId();
+      if (!consumed) {
+        await refresh();
+      }
       setLoading(false);
     })();
-  }, [refresh]);
+  }, [refresh, consumeWebSessionId]);
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await api<{ token: string; user: User }>("/auth/login", {
