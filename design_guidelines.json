@@ -1,0 +1,136 @@
+{
+  "app_name": "What's In My Wardrobe",
+  "theme_and_archetype": {
+    "domain": "Fashion & Personal Stylist",
+    "theme": "Dark",
+    "archetype": "Archetype 5 (Luxury) with Editorial Twist",
+    "mood": "Premium, fashion-forward, editorial, sophisticated, like a high-end digital magazine. Emphasizes negative space, sharp contrasts, and high-quality photography."
+  },
+  "typography": {
+    "fonts": {
+      "heading": "Playfair Display",
+      "heading_fallback": "Georgia, serif",
+      "body": "Outfit",
+      "body_fallback": "System UI, sans-serif"
+    },
+    "scale": {
+      "h1": { "fontSize": "40px", "lineHeight": "44px", "letterSpacing": "-1px", "fontFamily": "heading" },
+      "h2": { "fontSize": "32px", "lineHeight": "36px", "letterSpacing": "-0.5px", "fontFamily": "heading" },
+      "h3": { "fontSize": "24px", "lineHeight": "28px", "letterSpacing": "0px", "fontFamily": "heading" },
+      "body_large": { "fontSize": "18px", "lineHeight": "26px", "letterSpacing": "0px", "fontFamily": "body" },
+      "body": { "fontSize": "16px", "lineHeight": "24px", "letterSpacing": "0px", "fontFamily": "body" },
+      "caption_overline": { "fontSize": "12px", "lineHeight": "16px", "letterSpacing": "1.5px", "textTransform": "uppercase", "fontFamily": "body" }
+    },
+    "rules": [
+      "No generic sans-serif for headings (Inter/Roboto are banned).",
+      "Headings should use tight tracking/letter-spacing.",
+      "Overlines must be uppercase with wide tracking (1.5px)."
+    ]
+  },
+  "color_palette": {
+    "background": {
+      "primary": "#050505",
+      "secondary": "#121212",
+      "tertiary": "#1A1A1A"
+    },
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#A3A3A3",
+      "inverse": "#000000"
+    },
+    "accent": {
+      "primary": "#C5A059",
+      "primary_hover": "#DEB76E",
+      "danger": "#722F37"
+    },
+    "border": {
+      "default": "#2A2A2A",
+      "light": "#333333"
+    }
+  },
+  "spacing_and_layout": {
+    "system": "8px grid system (8, 16, 24, 32, 48, 64)",
+    "screen_padding": "24px",
+    "rules": [
+      "Mobile-first gesture-driven layouts.",
+      "Tap targets must be a minimum of 48x48px.",
+      "Use edge-to-edge imagery for hero sections and lookbook covers.",
+      "Generous spacing: use 32px or 48px between major sections instead of standard 16px."
+    ]
+  },
+  "components": {
+    "buttons": {
+      "primary": { "backgroundColor": "accent.primary", "color": "text.inverse", "borderRadius": "2px", "padding": "16px 24px", "fontFamily": "body", "fontWeight": "600" },
+      "secondary": { "backgroundColor": "transparent", "color": "text.primary", "border": "1px solid #FFFFFF", "borderRadius": "2px", "padding": "16px 24px" }
+    },
+    "cards": {
+      "style": "Flat, brutalist editorial style. No heavy drop shadows.",
+      "borderRadius": "4px",
+      "border": "1px solid border.default",
+      "backgroundColor": "background.secondary"
+    },
+    "bottom_tab_bar": {
+      "style": "Glassmorphism / Translucent",
+      "backgroundColor": "rgba(5, 5, 5, 0.8)",
+      "backdropFilter": "blur(20px)",
+      "borderTop": "1px solid border.default",
+      "activeColor": "accent.primary",
+      "inactiveColor": "text.secondary"
+    },
+    "inputs": {
+      "style": "Underline or minimal flat background",
+      "backgroundColor": "transparent",
+      "borderBottom": "1px solid border.light",
+      "padding": "12px 0px"
+    }
+  },
+  "icons": {
+    "library": "Phosphor Icons",
+    "style": "Duotone or Thin weight to match luxury aesthetic"
+  },
+  "media": {
+    "onboarding_hero": [
+      {
+        "url": "https://images.pexels.com/photos/28263000/pexels-photo-28263000.jpeg",
+        "description": "Chic fashion portrait of a model in a luxurious white fur coat.",
+        "usage": "Onboarding splash screen or AI Stylist welcome background."
+      }
+    ],
+    "closet_backgrounds": [
+      {
+        "url": "https://images.unsplash.com/photo-1649361811423-a55616f7ab11",
+        "description": "Walk-in closet filled with luxury clothes.",
+        "usage": "Guided capture intro or empty state background for Closet tab."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1672137233327-37b0c1049e77",
+        "description": "Walk-in closet with mirror and stool.",
+        "usage": "Profile/Settings header background."
+      }
+    ],
+    "outfits_lookbooks": [
+      {
+        "url": "https://images.unsplash.com/photo-1632469188022-b5db09a70fbc",
+        "description": "Flat lay of shoes, hat, and sweater.",
+        "usage": "Dummy data for Outfit/Lookbook cards."
+      },
+      {
+        "url": "https://images.pexels.com/photos/5405607/pexels-photo-5405607.jpeg",
+        "description": "Neutral fashion essentials.",
+        "usage": "Dummy data for Lookbook feed."
+      }
+    ]
+  },
+  "testing": {
+    "requirement": "All interactive and key informational elements MUST include a 'testID' (React Native equivalent to 'data-testid') attribute.",
+    "convention": "kebab-case, role-based (e.g., 'closet-filter-button', 'stylist-chat-input')"
+  },
+  "instructions_to_main_agent": [
+    "Build standard React Native/Expo screens using the provided dark luxury theme.",
+    "Prioritize smooth gestural animations (e.g., React Native Reanimated) for the guided capture walkthrough.",
+    "Use Playfair Display for primary headers and Outfit for body text (configure expo-font).",
+    "For the camera/video walkthrough, utilize expo-camera with an overlay frame to act as the 'AI guide'.",
+    "Images for dummy data MUST be sourced from the 'media' object in this JSON; do not use placeholders like via.placeholder.com.",
+    "Ensure the bottom tab bar uses a blurred, glass-like background to maintain the premium magazine aesthetic."
+  ]
+}
