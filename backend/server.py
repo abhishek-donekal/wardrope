@@ -526,7 +526,10 @@ async def ai_stylist(body: StylistRequest, current=Depends(get_current_user)):
         return StylistResponse(message=str(data.get("message", "Here are some looks.")), outfits=outfits)
     except Exception as e:
         logger.error(f"ai_stylist error: {e}")
-        raise HTTPException(status_code=500, detail="Stylist failed")
+        return StylistResponse(
+            message="Stylist is taking a quick break — try again in a moment.",
+            outfits=[],
+        )
 
 
 # ---------------------- Items CRUD ----------------------
@@ -768,7 +771,7 @@ async def recreate_lookbook(lookbook_id: str, current=Depends(get_current_user))
         }
     except Exception as e:
         logger.error(f"recreate_lookbook error: {e}")
-        raise HTTPException(status_code=500, detail="Recreate failed")
+        return {"message": "Couldn't recreate this look right now — please try again.", "outfit": None}
 
 
 # ---------------------- Camera Roll Scan ----------------------
