@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+from openai import AsyncOpenAI
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -25,8 +25,7 @@ DB_NAME = os.environ["DB_NAME"]
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
 JWT_SECRET = os.environ.get("JWT_SECRET", "dev_secret")
 JWT_EXPIRES_DAYS = int(os.environ.get("JWT_EXPIRES_DAYS", "30"))
-AI_MODEL_PROVIDER = "openai"
-AI_MODEL_NAME = "gpt-5.2"
+AI_MODEL_NAME = "gpt-4o"
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
@@ -387,20 +386,8 @@ def _safe_json_loads(text: str) -> Optional[Dict[str, Any]]:
 
 async def ai_tag_item(image_base64: str) -> ItemTags:
     if not EMERGENT_LLM_KEY:
-        # Fallback: return blank tags
         return ItemTags(description="Untagged item")
 
-    chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=f"tag-{uuid.uuid4().hex[:8]}",
-        system_message=(
-            "You are a meticulous fashion cataloger. Given a single garment photo, "
-            "return a strict JSON object describing the item. Output ONLY the JSON, "
-            "no prose, no markdown fences."
-        ),
-    ).with_model(AI_MODEL_PROVIDER, AI_MODEL_NAME)
-
-    img = ImageContent(image_base64=_strip_data_url(image_base64))
     schema_hint = (
         "Schema: {"
         "\"type\": string (e.g. 'blouse','jeans','sneakers'),"
@@ -414,12 +401,30 @@ async def ai_tag_item(image_base64: str) -> ItemTags:
         "\"description\": short human label like 'cream silk blouse'"
         "}"
     )
-    user_msg = UserMessage(
-        text=f"Catalog this clothing item. {schema_hint}",
-        file_contents=[img],
-    )
     try:
-        resp = await chat.send_message(user_msg)
+        client = AsyncOpenAI(api_key=EMERGENT_LLM_KEY)
+        response = await client.chat.completions.create(
+            model=AI_MODEL_NAME,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a meticulous fashion cataloger. Given a single garment photo, "
+                        "return a strict JSON object describing the item. Output ONLY the JSON, "
+                        "no prose, no markdown fences."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": f"Catalog this clothing item. {schema_hint}"},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{_strip_data_url(image_base64)}"}},
+                    ],
+                },
+            ],
+            max_tokens=500,
+        )
+        resp = response.choices[0].message.content
         data = _safe_json_loads(resp if isinstance(resp, str) else str(resp))
         if not data:
             return ItemTags(description="Untagged item")
@@ -491,11 +496,6 @@ async def ai_stylist(body: StylistRequest, current=Depends(get_current_user)):
         "\"vibe\": string}]}"
         ". Each outfit should include 3-6 item_ids from the catalog. Never invent ids."
     )
-    chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=f"stylist-{current['user_id']}-{uuid.uuid4().hex[:6]}",
-        system_message=sys_msg,
-    ).with_model(AI_MODEL_PROVIDER, AI_MODEL_NAME)
 
     prompt = (
         f"User request: {body.prompt}\n"
@@ -507,7 +507,16 @@ async def ai_stylist(body: StylistRequest, current=Depends(get_current_user)):
     )
 
     try:
-        resp = await chat.send_message(UserMessage(text=prompt))
+        client = AsyncOpenAI(api_key=EMERGENT_LLM_KEY)
+        response = await client.chat.completions.create(
+            model=AI_MODEL_NAME,
+            messages=[
+                {"role": "system", "content": sys_msg},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=2000,
+        )
+        resp = response.choices[0].message.content
         data = _safe_json_loads(resp if isinstance(resp, str) else str(resp))
         if not data:
             return StylistResponse(message="Sorry, I couldn't generate looks right now.", outfits=[])
@@ -743,17 +752,21 @@ async def recreate_lookbook(lookbook_id: str, current=Depends(get_current_user))
         "You are a stylist. Pick 3-6 items from the user's catalog to recreate the look. "
         "Return strict JSON: {\"title\": string, \"description\": string, \"item_ids\": [string]}"
     )
-    chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=f"recreate-{current['user_id']}-{uuid.uuid4().hex[:6]}",
-        system_message=sys_msg,
-    ).with_model(AI_MODEL_PROVIDER, AI_MODEL_NAME)
     prompt = (
         f"Lookbook: {lb['title']} — {lb['subtitle']}. Vibe: {lb['vibe']}. "
         f"Tags: {', '.join(lb['tags'])}.\n\nCatalog:\n{catalog}\n\nReturn JSON only."
     )
     try:
-        resp = await chat.send_message(UserMessage(text=prompt))
+        client = AsyncOpenAI(api_key=EMERGENT_LLM_KEY)
+        response = await client.chat.completions.create(
+            model=AI_MODEL_NAME,
+            messages=[
+                {"role": "system", "content": sys_msg},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=500,
+        )
+        resp = response.choices[0].message.content
         data = _safe_json_loads(resp if isinstance(resp, str) else str(resp))
         if not data:
             return {"message": "Couldn't recreate this look right now.", "outfit": None}
