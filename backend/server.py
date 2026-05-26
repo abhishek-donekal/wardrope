@@ -2,6 +2,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+import certifi
 import os
 import logging
 import re
@@ -27,7 +28,7 @@ JWT_SECRET = os.environ.get("JWT_SECRET", "dev_secret")
 JWT_EXPIRES_DAYS = int(os.environ.get("JWT_EXPIRES_DAYS", "30"))
 AI_MODEL_NAME = "gpt-4o"
 
-client = AsyncIOMotorClient(MONGO_URL) if MONGO_URL else None
+client = AsyncIOMotorClient(MONGO_URL, tlsCAFile=certifi.where()) if MONGO_URL else None
 db = client[DB_NAME] if client else None
 
 app = FastAPI(title="What's In My Wardrobe API")
