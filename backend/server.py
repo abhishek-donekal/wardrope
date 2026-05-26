@@ -819,7 +819,7 @@ async def scan_camera_roll(body: CameraRollScanIn, current=Depends(get_current_u
 # ---------------------- Health ----------------------
 @api.get("/")
 async def root():
-    return {"ok": True, "app": "wardrobe", "model": f"{AI_MODEL_PROVIDER}/{AI_MODEL_NAME}"}
+    return {"ok": True, "app": "wardrobe", "model": AI_MODEL_NAME}
 
 
 app.include_router(api)
@@ -835,7 +835,9 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
-    # Indexes
+    if db is None:
+        logger.warning("No MONGO_URL set — database disabled")
+        return
     await db.users.create_index("email", unique=True)
     await db.users.create_index("user_id", unique=True)
     await db.user_sessions.create_index("session_token", unique=True)
