@@ -20,15 +20,15 @@ from openai import AsyncOpenAI
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-MONGO_URL = os.environ["MONGO_URL"]
-DB_NAME = os.environ["DB_NAME"]
+MONGO_URL = os.environ.get("MONGO_URL", "")
+DB_NAME = os.environ.get("DB_NAME", "wardrobe")
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
 JWT_SECRET = os.environ.get("JWT_SECRET", "dev_secret")
 JWT_EXPIRES_DAYS = int(os.environ.get("JWT_EXPIRES_DAYS", "30"))
 AI_MODEL_NAME = "gpt-4o"
 
-client = AsyncIOMotorClient(MONGO_URL)
-db = client[DB_NAME]
+client = AsyncIOMotorClient(MONGO_URL) if MONGO_URL else None
+db = client[DB_NAME] if client else None
 
 app = FastAPI(title="What's In My Wardrobe API")
 api = APIRouter(prefix="/api")
