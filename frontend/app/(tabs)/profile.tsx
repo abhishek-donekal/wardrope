@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ImageBackground,
   Alert,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -45,7 +46,14 @@ export default function Profile() {
     } catch {}
   };
 
-  const onLogout = () => {
+  const onLogout = async () => {
+    // Use native browser confirm on web (Alert.alert is unreliable in static Expo web builds)
+    if (Platform.OS === "web") {
+      if (typeof window !== "undefined" && !window.confirm("Sign out of Wardrope?")) return;
+      await logout();
+      router.replace("/auth/login");
+      return;
+    }
     Alert.alert("Sign out", "Are you sure?", [
       { text: "Cancel", style: "cancel" },
       {

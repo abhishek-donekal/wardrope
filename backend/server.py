@@ -11,6 +11,11 @@ import uuid
 import bcrypt
 import jwt
 import httpx
+import smtplib
+import random
+import asyncio
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
@@ -27,6 +32,20 @@ EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
 JWT_SECRET = os.environ.get("JWT_SECRET", "dev_secret")
 JWT_EXPIRES_DAYS = int(os.environ.get("JWT_EXPIRES_DAYS", "30"))
 AI_MODEL_NAME = "gpt-4o"
+
+# Email (SMTP) config
+SMTP_HOST = os.environ.get("SMTP_HOST", "")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASS = os.environ.get("SMTP_PASS", "")
+EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "Wardrope")
+EMAIL_FROM = os.environ.get("EMAIL_FROM", SMTP_USER)
+APP_URL = os.environ.get("APP_URL", "https://wardrope-red.vercel.app")
+
+# Twilio SMS config (optional)
+TWILIO_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
+TWILIO_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
+TWILIO_FROM = os.environ.get("TWILIO_PHONE_NUMBER", "")
 
 client = AsyncIOMotorClient(MONGO_URL, tlsCAFile=certifi.where()) if MONGO_URL else None
 db = client[DB_NAME] if client else None
@@ -51,11 +70,26 @@ class RegisterIn(BaseModel):
     email: EmailStr
     password: str
     name: str
+    phone: Optional[str] = None
 
 
 class LoginIn(BaseModel):
     email: EmailStr
     password: str
+
+
+class VerifyEmailIn(BaseModel):
+    email: EmailStr
+    code: str
+
+
+class SendPhoneCodeIn(BaseModel):
+    phone: str
+
+
+class VerifyPhoneIn(BaseModel):
+    phone: str
+    code: str
 
 
 class GoogleSessionIn(BaseModel):
@@ -74,6 +108,9 @@ class UserOut(BaseModel):
     fidelity_mode: str = "descriptive"  # or "identified"
     onboarding_complete: bool = False
     auth_provider: str = "email"
+    email_verified: bool = False
+    phone: Optional[str] = None
+    phone_verified: bool = False
     created_at: datetime
 
 
@@ -171,6 +208,137 @@ class CameraRollScanIn(BaseModel):
     images_base64: List[str]
 
 
+# ---------------------- Email & SMS helpers ----------------------
+def _email_html(content: str) -> str:
+    return f"""<!DOCTYPE html>
+<html>
+<body style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;background:#050505;margin:0;padding:0;">
+  <div style="max-width:480px;margin:40px auto;padding:40px 32px;background:#111111;border:1px solid #1e1e1e;">
+    <h1 style="color:#C5A059;font-size:26px;margin:0 0 4px;letter-spacing:1px;">WARDROPE</h1>
+    <p style="color:#666;font-size:11px;letter-spacing:3px;text-transform:uppercase;margin:0 0 32px;">Your digital wardrobe</p>
+    {content}
+    <hr style="border:none;border-top:1px solid #222;margin:32px 0;">
+    <p style="color:#444;font-size:11px;margin:0;">Wardrope &middot; <a href="{APP_URL}" style="color:#666;text-decoration:none;">{APP_URL}</a></p>
+  </div>
+</body>
+</html>"""
+
+
+async def send_email(to: str, subject: str, html_content: str) -> None:
+    if not SMTP_HOST or not SMTP_USER or not SMTP_PASS:
+        logger.warning("SMTP not configured — email skipped")
+        return
+    html = _email_html(html_content)
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = f"{EMAIL_FROM_NAME} <{EMAIL_FROM}>"
+    msg["To"] = to
+    msg.attach(MIMEText(html, "html"))
+
+    def _send():
+        try:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as s:
+                s.ehlo()
+                s.starttls()
+                s.login(SMTP_USER, SMTP_PASS)
+                s.sendmail(EMAIL_FROM, to, msg.as_string())
+            logger.info(f"Email sent to {to}: {subject}")
+        except Exception as e:
+            logger.error(f"SMTP send failed: {e}")
+
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _send)
+
+
+async def send_sms(to: str, body: str) -> None:
+    if not TWILIO_SID or not TWILIO_TOKEN or not TWILIO_FROM:
+        logger.warning("Twilio not configured — SMS skipped")
+        return
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as cli:
+            r = await cli.post(
+                f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_SID}/Messages.json",
+                auth=(TWILIO_SID, TWILIO_TOKEN),
+                data={"From": TWILIO_FROM, "To": to, "Body": body},
+            )
+            if r.status_code not in (200, 201):
+                logger.error(f"Twilio SMS failed ({r.status_code}): {r.text}")
+    except Exception as e:
+        logger.error(f"SMS send error: {e}")
+
+
+async def create_verification_code(target: str, code_type: str) -> str:
+    """Generate and store a 6-digit verification code (10-min TTL)."""
+    code = str(random.randint(100000, 999999))
+    if db is not None:
+        await db.verification_codes.replace_one(
+            {"target": target, "type": code_type},
+            {
+                "target": target,
+                "type": code_type,
+                "code": code,
+                "created_at": utcnow(),
+                "expires_at": utcnow() + timedelta(minutes=10),
+            },
+            upsert=True,
+        )
+    return code
+
+
+async def check_verification_code(target: str, code_type: str, code: str) -> bool:
+    """Return True and consume the code if valid and not expired."""
+    if db is None:
+        return False
+    doc = await db.verification_codes.find_one({"target": target, "type": code_type, "code": code})
+    if not doc:
+        return False
+    exp = doc.get("expires_at")
+    if isinstance(exp, datetime):
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if exp < utcnow():
+            return False
+    await db.verification_codes.delete_one({"_id": doc["_id"]})
+    return True
+
+
+async def send_welcome_email(email: str, name: str) -> None:
+    first = name.split()[0] if name else "there"
+    await send_email(
+        to=email,
+        subject="Welcome to Wardrope",
+        html_content=f"""
+<h2 style="color:#f0f0f0;font-size:22px;margin:0 0 16px;">Welcome, {first}.</h2>
+<p style="color:#aaa;font-size:15px;line-height:1.6;margin:0 0 24px;">
+  Your digital wardrobe is ready. Start cataloging your items, let the AI stylist build
+  looks from what you actually own, and explore editorial lookbooks for inspiration.
+</p>
+<a href="{APP_URL}" style="display:inline-block;background:#C5A059;color:#050505;text-decoration:none;
+  padding:14px 28px;font-weight:700;letter-spacing:1px;font-size:13px;">
+  OPEN MY WARDROBE
+</a>""",
+    )
+
+
+async def send_email_verification_code(email: str, name: str) -> None:
+    code = await create_verification_code(email, "email")
+    first = name.split()[0] if name else "there"
+    await send_email(
+        to=email,
+        subject="Verify your Wardrope email",
+        html_content=f"""
+<h2 style="color:#f0f0f0;font-size:22px;margin:0 0 16px;">Hi {first} — verify your email</h2>
+<p style="color:#aaa;font-size:15px;line-height:1.6;margin:0 0 24px;">
+  Enter this code in the app to confirm your email address.
+  It expires in <strong style="color:#f0f0f0;">10 minutes</strong>.
+</p>
+<div style="text-align:center;margin:32px 0;">
+  <span style="font-size:42px;font-weight:700;letter-spacing:12px;color:#C5A059;">{code}</span>
+</div>
+<p style="color:#555;font-size:12px;">If you didn't create a Wardrope account, you can safely ignore this email.</p>""",
+    )
+
+
 # ---------------------- Auth helpers ----------------------
 def hash_password(pw: str) -> str:
     return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
@@ -242,6 +410,9 @@ def user_to_out(u: Dict[str, Any]) -> UserOut:
         fidelity_mode=u.get("fidelity_mode", "descriptive"),
         onboarding_complete=u.get("onboarding_complete", False),
         auth_provider=u.get("auth_provider", "email"),
+        email_verified=u.get("email_verified", False),
+        phone=u.get("phone"),
+        phone_verified=u.get("phone_verified", False),
         created_at=u.get("created_at", utcnow()),
     )
 
@@ -254,12 +425,16 @@ async def auth_register(body: RegisterIn):
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
     user_id = new_id("user")
+    name = body.name.strip()
     doc = {
         "user_id": user_id,
         "email": email,
-        "name": body.name.strip(),
+        "name": name,
         "password_hash": hash_password(body.password),
         "auth_provider": "email",
+        "email_verified": False,
+        "phone": body.phone or None,
+        "phone_verified": False,
         "onboarding_complete": False,
         "style_preferences": [],
         "fidelity_mode": "descriptive",
@@ -268,6 +443,8 @@ async def auth_register(body: RegisterIn):
     await db.users.insert_one(doc)
     token = issue_jwt(user_id)
     user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    # Fire-and-forget: send email verification code
+    asyncio.create_task(send_email_verification_code(email, name))
     return {"token": token, "user": user_to_out(user_doc).model_dump()}
 
 
@@ -308,20 +485,27 @@ async def auth_google_session(body: GoogleSessionIn):
     session_token = data.get("session_token") or body.session_token
 
     user = await db.users.find_one({"email": email}, {"_id": 0})
+    is_new_user = not user
     if not user:
         user_id = new_id("user")
+        gname = data.get("name", email.split("@")[0])
         await db.users.insert_one({
             "user_id": user_id,
             "email": email,
-            "name": data.get("name", email.split("@")[0]),
+            "name": gname,
             "picture": data.get("picture"),
             "auth_provider": "google",
+            "email_verified": True,   # Google already verified the email
+            "phone": None,
+            "phone_verified": False,
             "onboarding_complete": False,
             "style_preferences": [],
             "fidelity_mode": "descriptive",
             "created_at": utcnow(),
         })
         user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+        # Send welcome email to new Google users
+        asyncio.create_task(send_welcome_email(email, gname))
 
     # Store session
     await db.user_sessions.update_one(
@@ -348,6 +532,59 @@ async def auth_logout(authorization: Optional[str] = Header(None)):
         token = authorization.split(" ", 1)[1].strip()
         await db.user_sessions.delete_one({"session_token": token})
     return {"ok": True}
+
+
+@api.post("/auth/resend-email-code")
+async def resend_email_code(current=Depends(get_current_user)):
+    """Resend email verification code to the current user."""
+    if current.get("email_verified"):
+        return {"ok": True, "already_verified": True}
+    asyncio.create_task(send_email_verification_code(current["email"], current.get("name", "")))
+    return {"ok": True}
+
+
+@api.post("/auth/verify-email")
+async def verify_email_endpoint(body: VerifyEmailIn, current=Depends(get_current_user)):
+    """Verify the 6-digit code sent to the user's email."""
+    if current.get("email_verified"):
+        return {"ok": True, "user": user_to_out(current).model_dump()}
+    email = body.email.lower().strip()
+    if email != current["email"]:
+        raise HTTPException(status_code=400, detail="Email mismatch")
+    ok = await check_verification_code(email, "email", body.code.strip())
+    if not ok:
+        raise HTTPException(status_code=400, detail="Invalid or expired code")
+    await db.users.update_one({"user_id": current["user_id"]}, {"$set": {"email_verified": True}})
+    user_doc = await db.users.find_one({"user_id": current["user_id"]}, {"_id": 0})
+    # Send welcome email after successful email verification
+    asyncio.create_task(send_welcome_email(user_doc["email"], user_doc.get("name", "")))
+    return {"ok": True, "user": user_to_out(user_doc).model_dump()}
+
+
+@api.post("/auth/send-phone-code")
+async def send_phone_code(body: SendPhoneCodeIn, current=Depends(get_current_user)):
+    """Send a 6-digit SMS verification code to the given phone number."""
+    phone = body.phone.strip()
+    code = await create_verification_code(phone, "phone")
+    await send_sms(phone, f"Your Wardrope verification code is: {code}. It expires in 10 minutes.")
+    # Store phone on user so it's available
+    await db.users.update_one({"user_id": current["user_id"]}, {"$set": {"phone": phone}})
+    return {"ok": True}
+
+
+@api.post("/auth/verify-phone")
+async def verify_phone_endpoint(body: VerifyPhoneIn, current=Depends(get_current_user)):
+    """Verify the 6-digit SMS code sent to the user's phone."""
+    phone = body.phone.strip()
+    ok = await check_verification_code(phone, "phone", body.code.strip())
+    if not ok:
+        raise HTTPException(status_code=400, detail="Invalid or expired code")
+    await db.users.update_one(
+        {"user_id": current["user_id"]},
+        {"$set": {"phone": phone, "phone_verified": True}},
+    )
+    user_doc = await db.users.find_one({"user_id": current["user_id"]}, {"_id": 0})
+    return {"ok": True, "user": user_to_out(user_doc).model_dump()}
 
 
 @api.put("/users/me/profile")
@@ -846,6 +1083,8 @@ async def startup():
         await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
         await db.items.create_index([("user_id", 1), ("created_at", -1)])
         await db.outfits.create_index([("user_id", 1), ("created_at", -1)])
+        await db.verification_codes.create_index("expires_at", expireAfterSeconds=0)
+        await db.verification_codes.create_index([("target", 1), ("type", 1)], unique=True)
         logger.info("Wardrobe API ready")
     except Exception as e:
         logger.error(f"DB index creation failed (check Atlas Network Access whitelist): {e}")

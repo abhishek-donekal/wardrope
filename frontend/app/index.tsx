@@ -13,6 +13,8 @@ export default function Index() {
     if (loading) return;
     if (!user) {
       router.replace("/auth/login");
+    } else if (user.auth_provider === "email" && !user.email_verified) {
+      router.replace("/auth/verify-email");
     } else if (!user.onboarding_complete) {
       router.replace("/onboarding");
     } else {

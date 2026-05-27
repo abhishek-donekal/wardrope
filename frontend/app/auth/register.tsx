@@ -17,18 +17,27 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/src/contexts/AuthContext";
 import { colors, type, space } from "@/src/theme";
 
+function formatPhone(raw: string): string {
+  const nums = raw.replace(/\D/g, "").slice(0, 10);
+  if (nums.length <= 3) return nums;
+  if (nums.length <= 6) return `(${nums.slice(0, 3)}) ${nums.slice(3)}`;
+  return `(${nums.slice(0, 3)}) ${nums.slice(3, 6)}-${nums.slice(6)}`;
+}
+
 export default function Register() {
   const { register } = useAuth();
   const router = useRouter();
-  const [email, setEmail] = useState("");
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const submit = async () => {
     if (!email || !password || !name) {
-      setErr("All fields required");
+      setErr("Name, email and password are required");
       return;
     }
     if (password.length < 6) {
@@ -38,8 +47,11 @@ export default function Register() {
     setErr(null);
     setBusy(true);
     try {
-      await register(email.trim(), password, name.trim());
-      router.replace("/onboarding");
+      // Strip formatting from phone before sending
+      const rawPhone = phone.replace(/\D/g, "");
+      await register(email.trim(), password, name.trim(), rawPhone ? `+1${rawPhone}` : undefined);
+      // Navigate to email verification — backend already sent the code
+      router.replace("/auth/verify-email");
     } catch (e: any) {
       setErr(e?.message || "Registration failed");
     } finally {
@@ -82,23 +94,43 @@ export default function Register() {
             testID="register-email-input"
             value={email}
             onChangeText={setEmail}
-            placeholder="you@wardrobe.app"
+            placeholder="you@example.com"
             placeholderTextColor={colors.textSecondary}
             autoCapitalize="none"
             keyboardType="email-address"
             style={styles.input}
           />
 
-          <Text style={[styles.label, { marginTop: space.md }]}>Password</Text>
+          <Text style={[styles.label, { marginTop: space.md }]}>Phone number <Text style={styles.optional}>(optional)</Text></Text>
           <TextInput
-            testID="register-password-input"
-            value={password}
-            onChangeText={setPassword}
-            placeholder="6+ characters"
+            testID="register-phone-input"
+            value={phone}
+            onChangeText={(t) => setPhone(formatPhone(t))}
+            placeholder="(555) 000-0000"
             placeholderTextColor={colors.textSecondary}
-            secureTextEntry
+            keyboardType="phone-pad"
             style={styles.input}
           />
+
+          <Text style={[styles.label, { marginTop: space.md }]}>Password</Text>
+          <View style={styles.passwordRow}>
+            <TextInput
+              testID="register-password-input"
+              value={password}
+              onChangeText={setPassword}
+              placeholder="6+ characters"
+              placeholderTextColor={colors.textSecondary}
+              secureTextEntry={!showPassword}
+              style={[styles.input, { flex: 1, borderBottomWidth: 0 }]}
+            />
+            <TouchableOpacity onPress={() => setShowPassword((v) => !v)} style={styles.eyeBtn}>
+              <Ionicons
+                name={showPassword ? "eye-off-outline" : "eye-outline"}
+                size={20}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity
             testID="register-submit-btn"
@@ -132,6 +164,7 @@ const styles = StyleSheet.create({
   form: { paddingHorizontal: space.lg, paddingBottom: space.xxl },
   back: { paddingVertical: space.sm, marginBottom: space.md, marginLeft: -8 },
   label: { ...type.overline, fontSize: 11, marginBottom: 6 },
+  optional: { color: colors.textSecondary, fontWeight: "400", letterSpacing: 0 },
   input: {
     color: colors.text,
     fontSize: 16,
@@ -139,6 +172,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
   },
+  passwordRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  eyeBtn: { padding: 10 },
   primaryBtn: {
     backgroundColor: colors.accent,
     paddingVertical: 16,

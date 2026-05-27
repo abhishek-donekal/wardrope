@@ -17,13 +17,16 @@ export type User = {
   fidelity_mode: string;
   onboarding_complete: boolean;
   auth_provider: string;
+  email_verified: boolean;
+  phone?: string | null;
+  phone_verified: boolean;
 };
 
 type AuthState = {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string) => Promise<void>;
+  register: (email: string, password: string, name: string, phone?: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -109,10 +112,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUserState(res.user);
   }, []);
 
-  const register = useCallback(async (email: string, password: string, name: string) => {
+  const register = useCallback(async (email: string, password: string, name: string, phone?: string) => {
     const res = await api<{ token: string; user: User }>("/auth/register", {
       method: "POST",
-      body: { email, password, name },
+      body: { email, password, name, ...(phone ? { phone } : {}) },
       auth: false,
     });
     await setToken(res.token);

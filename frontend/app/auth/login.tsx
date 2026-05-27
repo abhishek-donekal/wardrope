@@ -25,6 +25,7 @@ export default function Login() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -106,15 +107,24 @@ export default function Login() {
           />
 
           <Text style={[styles.label, { marginTop: space.md }]}>Password</Text>
-          <TextInput
-            testID="login-password-input"
-            value={password}
-            onChangeText={setPassword}
-            placeholder="••••••••"
-            placeholderTextColor={colors.textSecondary}
-            secureTextEntry
-            style={styles.input}
-          />
+          <View style={styles.passwordRow}>
+            <TextInput
+              testID="login-password-input"
+              value={password}
+              onChangeText={setPassword}
+              placeholder="••••••••"
+              placeholderTextColor={colors.textSecondary}
+              secureTextEntry={!showPassword}
+              style={[styles.input, { flex: 1 }]}
+            />
+            <TouchableOpacity onPress={() => setShowPassword((v) => !v)} style={styles.eyeBtn}>
+              <Ionicons
+                name={showPassword ? "eye-off-outline" : "eye-outline"}
+                size={20}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity
             testID="login-submit-btn"
@@ -167,7 +177,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
-    fontFamily: type.body.fontFamily,
+    fontFamily: type.body.fontFamily as string,
   },
   primaryBtn: {
     backgroundColor: colors.accent,
@@ -192,6 +202,13 @@ const styles = StyleSheet.create({
   },
   googleBtnText: { color: colors.text, fontWeight: "600", letterSpacing: 0.5 },
   footer: { flexDirection: "row", justifyContent: "center", marginTop: space.lg },
+  passwordRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  eyeBtn: { padding: 10 },
   err: {
     color: "#FF7A7A",
     backgroundColor: "rgba(114, 47, 55, 0.25)",

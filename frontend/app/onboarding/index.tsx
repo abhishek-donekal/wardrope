@@ -50,13 +50,30 @@ export default function Onboarding() {
     setStylePrefs((p) => (p.includes(s) ? p.filter((x) => x !== s) : [...p, s]));
   };
 
+  // Convert MM/DD/YYYY display value to YYYY-MM-DD for the API
+  const dobToISO = (mmddyyyy: string): string | null => {
+    const nums = mmddyyyy.replace(/\D/g, "");
+    if (nums.length < 8) return null;
+    const mm = nums.slice(0, 2);
+    const dd = nums.slice(2, 4);
+    const yyyy = nums.slice(4, 8);
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const formatDob = (raw: string): string => {
+    const nums = raw.replace(/\D/g, "").slice(0, 8);
+    if (nums.length <= 2) return nums;
+    if (nums.length <= 4) return `${nums.slice(0, 2)}/${nums.slice(2)}`;
+    return `${nums.slice(0, 2)}/${nums.slice(2, 4)}/${nums.slice(4)}`;
+  };
+
   const finish = async () => {
     setBusy(true);
     try {
       const res = await api<{ user: any }>("/users/me/profile", {
         method: "PUT",
         body: {
-          dob: dob || null,
+          dob: dobToISO(dob),
           gender,
           lifestyle,
           style_preferences: stylePrefs,
@@ -107,9 +124,11 @@ export default function Onboarding() {
               <TextInput
                 testID="onboarding-dob-input"
                 value={dob}
-                onChangeText={setDob}
-                placeholder="YYYY-MM-DD"
+                onChangeText={(t) => setDob(formatDob(t))}
+                placeholder="MM/DD/YYYY"
                 placeholderTextColor={colors.textSecondary}
+                keyboardType="number-pad"
+                maxLength={10}
                 style={styles.input}
               />
             </View>
