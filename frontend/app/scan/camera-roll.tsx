@@ -15,14 +15,15 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 
-import { api } from "@/src/lib/api";
+import { api, uploadImageToS3 } from "@/src/lib/api";
 import { colors, type, space } from "@/src/theme";
 
 export default function CameraRollScan() {
   const router = useRouter();
-  const [picked, setPicked] = useState<string[]>([]); // base64 list
+  const [picked, setPicked] = useState<string[]>([]); // local URI list
   const [busy, setBusy] = useState(false);
   const [added, setAdded] = useState<number | null>(null);
+  const [uploadProgress, setUploadProgress] = useState("");
 
   const ensurePerm = async (): Promise<boolean> => {
     const cur = await ImagePicker.getMediaLibraryPermissionsAsync();
@@ -41,31 +42,37 @@ export default function CameraRollScan() {
   const pick = async () => {
     if (!(await ensurePerm())) return;
     const r = await ImagePicker.launchImageLibraryAsync({
-      base64: true,
       quality: 0.6,
       allowsMultipleSelection: true,
       selectionLimit: 6,
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
     });
     if (r.canceled) return;
-    const newOnes = (r.assets || []).map((a) => a.base64).filter((x): x is string => !!x);
-    setPicked((p) => [...p, ...newOnes].slice(0, 8));
+    const newUris = (r.assets || []).map((a) => a.uri).filter((x): x is string => !!x);
+    setPicked((p) => [...p, ...newUris].slice(0, 8));
   };
 
   const scan = async () => {
     if (picked.length === 0) return;
     setBusy(true);
     setAdded(null);
+    setUploadProgress("Uploading images…");
     try {
-      const res = await api<{ added: number; errors: number; items: any[] }>("/scan/camera-roll", {
+      // Upload all images to S3 concurrently
+      const imageUrls = await Promise.all(
+        picked.map((uri) => uploadImageToS3(uri, "item.jpg"))
+      );
+      setUploadProgress("Processing with AI…");
+      const res = await api<{ added: number; errors: number; items: any[] }>("/scan/camera-roll-urls", {
         method: "POST",
-        body: { images_base64: picked },
+        body: { image_urls: imageUrls },
       });
       setAdded(res.added);
     } catch (e: any) {
       Alert.alert("Scan failed", e?.message || "Try again");
     } finally {
       setBusy(false);
+      setUploadProgress("");
     }
   };
 
@@ -87,9 +94,9 @@ export default function CameraRollScan() {
 
         {picked.length > 0 ? (
           <View style={styles.grid}>
-            {picked.map((b, i) => (
+            {picked.map((uri, i) => (
               <View key={i} style={styles.thumbWrap}>
-                <Image source={{ uri: `data:image/jpeg;base64,${b}` }} style={styles.thumb} />
+                <Image source={{ uri }} style={styles.thumb} />
                 <TouchableOpacity
                   style={styles.removeBtn}
                   onPress={() => setPicked((p) => p.filter((_, idx) => idx !== i))}
@@ -124,6 +131,12 @@ export default function CameraRollScan() {
             </TouchableOpacity>
           </View>
         ) : (
+          {busy && uploadProgress ? (
+            <View style={styles.progressRow}>
+              <ActivityIndicator color={colors.accent} />
+              <Text style={[type.bodySm, { marginLeft: 10 }]}>{uploadProgress}</Text>
+            </View>
+          ) : null}
           <TouchableOpacity
             testID="scan-process-btn"
             style={[styles.primaryBtn, (picked.length === 0 || busy) && { opacity: 0.4 }]}
@@ -164,6 +177,7 @@ const styles = StyleSheet.create({
     gap: 10, padding: 16, borderWidth: 1, borderColor: colors.accent, borderStyle: "dashed",
   },
   pickBtnText: { color: colors.accent, fontWeight: "600" },
+  progressRow: { flexDirection: "row", alignItems: "center", paddingVertical: space.md, marginTop: space.md },
   primaryBtn: { backgroundColor: colors.accent, paddingVertical: 16, alignItems: "center", marginTop: space.xl },
   primaryBtnText: { color: colors.textInverse, fontWeight: "700", letterSpacing: 1 },
   result: { alignItems: "center", paddingVertical: space.xl, marginTop: space.lg },

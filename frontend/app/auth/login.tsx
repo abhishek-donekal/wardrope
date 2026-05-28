@@ -21,7 +21,7 @@ import { useAuth } from "@/src/contexts/AuthContext";
 import { colors, type, space } from "@/src/theme";
 
 export default function Login() {
-  const { login, loginWithGoogle } = useAuth();
+  const { login, loginWithGoogle, enterDemoMode } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -150,6 +150,17 @@ export default function Login() {
             <Text style={styles.googleBtnText}>Continue with Google</Text>
           </TouchableOpacity>
 
+          <TouchableOpacity
+            style={styles.demoBtn}
+            onPress={() => {
+              enterDemoMode();
+              router.replace("/");
+            }}
+          >
+            <Text style={styles.demoBtnText}>Preview Experience</Text>
+            <Text style={styles.demoBtnSub}>No account needed</Text>
+          </TouchableOpacity>
+
           <View style={styles.footer}>
             <Text style={type.bodySm}>New here? </Text>
             <Link href="/auth/register" asChild>
@@ -201,6 +212,16 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   googleBtnText: { color: colors.text, fontWeight: "600", letterSpacing: 0.5 },
+  demoBtn: {
+    borderWidth: 1,
+    borderColor: colors.accent,
+    borderRadius: 2,
+    paddingVertical: 14,
+    alignItems: "center",
+    marginTop: space.md,
+  },
+  demoBtnText: { color: colors.accent, fontWeight: "600", fontSize: 15 },
+  demoBtnSub: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
   footer: { flexDirection: "row", justifyContent: "center", marginTop: space.lg },
   passwordRow: {
     flexDirection: "row",

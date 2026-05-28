@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -26,6 +26,7 @@ type Item = {
   item_id: string;
   name: string;
   image_base64: string;
+  image_url?: string;
   tags: {
     category?: string;
     color?: string;
@@ -34,6 +35,13 @@ type Item = {
     description?: string;
   };
   favorite?: boolean;
+};
+
+type Closet = {
+  closet_id: string;
+  name: string;
+  is_default: boolean;
+  item_count: number;
 };
 
 const DEFAULT_FILTERS = [
@@ -58,6 +66,10 @@ export default function Closet() {
   const [newCatName, setNewCatName] = useState("");
   const [addingCat, setAddingCat] = useState(false);
 
+  // Closet state
+  const [closets, setClosets] = useState<Closet[]>([]);
+  const [selectedClosetId, setSelectedClosetId] = useState<string | null>(null);
+
   const filters = useMemo(() => {
     const custom = categories.filter(
       (c) => !DEFAULT_FILTERS.some((f) => f.id === c)
@@ -71,21 +83,55 @@ export default function Closet() {
 
   const load = useCallback(async () => {
     try {
-      const [itemRes, catRes] = await Promise.all([
-        api<{ items: Item[] }>("/items"),
+      const [closetRes, catRes] = await Promise.all([
+        api<{ closets: Closet[] }>("/closets").catch(() => ({ closets: [] })),
         api<{ categories: string[] }>("/users/me/categories").catch(() => ({ categories: [] })),
       ]);
-      setItems(itemRes.items);
+
+      const fetchedClosets = closetRes.closets || [];
+      setClosets(fetchedClosets);
+
+      // Set default selected closet on first load
+      setSelectedClosetId((prev) => {
+        if (prev) return prev;
+        return fetchedClosets[0]?.closet_id ?? null;
+      });
+
       setCategories(catRes.categories || []);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Fetch items whenever selectedClosetId changes
+  const loadItems = useCallback(async () => {
+    try {
+      const url = selectedClosetId
+        ? `/items?closet_id=${encodeURIComponent(selectedClosetId)}`
+        : "/items";
+      const itemRes = await api<{ items: Item[] }>(url);
+      setItems(itemRes.items);
     } catch {
       // ignore
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [selectedClosetId]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      load().then(() => loadItems());
+    }, [load, loadItems])
+  );
+
+  // Reload items when selected closet changes (after initial load)
+  useEffect(() => {
+    if (!loading) {
+      loadItems();
+    }
+  }, [selectedClosetId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addCategory = async () => {
     const name = newCatName.trim().toLowerCase();
@@ -110,7 +156,7 @@ export default function Closet() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    load();
+    load().then(() => loadItems());
   };
 
   if (loading) {
@@ -131,11 +177,48 @@ export default function Closet() {
         <TouchableOpacity
           testID="closet-add-btn"
           style={styles.addBtn}
-          onPress={() => router.push("/add-item")}
+          onPress={() =>
+            router.push(
+              selectedClosetId
+                ? `/add-item?closet_id=${encodeURIComponent(selectedClosetId)}`
+                : "/add-item"
+            )
+          }
         >
           <Ionicons name="add" size={24} color={colors.textInverse} />
         </TouchableOpacity>
       </View>
+
+      {/* Closet picker */}
+      {closets.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.closetRow}
+          contentContainerStyle={styles.closetRowContent}
+        >
+          {closets.map((c) => {
+            const active = selectedClosetId === c.closet_id;
+            return (
+              <TouchableOpacity
+                key={c.closet_id}
+                testID={`closet-pill-${c.closet_id}`}
+                onPress={() => setSelectedClosetId(c.closet_id)}
+                style={[styles.closetPill, active && styles.closetPillActive]}
+              >
+                <Text style={[styles.closetPillText, active && styles.closetPillTextActive]}>
+                  {c.name}
+                </Text>
+                {c.item_count > 0 && (
+                  <Text style={[styles.closetPillCount, active && styles.closetPillCountActive]}>
+                    {" "}{c.item_count}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
 
       <ScrollView
         horizontal
@@ -192,7 +275,11 @@ export default function Closet() {
       </Modal>
 
       {filtered.length === 0 ? (
-        <Empty filter={filter} onAdd={() => router.push("/add-item")} onScan={() => router.push("/scan/camera-roll")} />
+        <Empty filter={filter} onAdd={() => router.push(
+          selectedClosetId
+            ? `/add-item?closet_id=${encodeURIComponent(selectedClosetId)}`
+            : "/add-item"
+        )} onScan={() => router.push("/scan/camera-roll")} />
       ) : (
         <FlatList
           data={filtered}
@@ -209,7 +296,7 @@ export default function Closet() {
               onPress={() => router.push(`/item/${item.item_id}`)}
             >
               <Image
-                source={{ uri: `data:image/jpeg;base64,${item.image_base64}` }}
+                source={{ uri: item.image_url || (item.image_base64 ? `data:image/jpeg;base64,${item.image_base64}` : undefined) }}
                 style={styles.cardImg}
               />
               <View style={styles.cardInfo}>
@@ -272,6 +359,30 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
     alignItems: "center", justifyContent: "center",
   },
+  closetRow: { flexGrow: 0 },
+  closetRowContent: {
+    paddingHorizontal: space.lg,
+    gap: 8,
+    paddingBottom: space.sm,
+  },
+  closetPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 999,
+    backgroundColor: colors.bgSecondary,
+  },
+  closetPillActive: {
+    borderColor: colors.accent,
+    backgroundColor: "rgba(197,160,89,0.15)",
+  },
+  closetPillText: { color: colors.textSecondary, fontSize: 13, fontWeight: "600" },
+  closetPillTextActive: { color: colors.accent },
+  closetPillCount: { color: colors.textSecondary, fontSize: 12 },
+  closetPillCountActive: { color: colors.accent },
   filterRow: { flexGrow: 0 },
   filterRowContent: { paddingHorizontal: space.lg, gap: 8, paddingBottom: space.md },
   filterChip: {

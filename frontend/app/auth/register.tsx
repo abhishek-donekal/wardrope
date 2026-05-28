@@ -31,6 +31,7 @@ export default function Register() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [referralCode, setReferralCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -49,7 +50,7 @@ export default function Register() {
     try {
       // Strip formatting from phone before sending
       const rawPhone = phone.replace(/\D/g, "");
-      await register(email.trim(), password, name.trim(), rawPhone ? `+1${rawPhone}` : undefined);
+      await register(email.trim(), password, name.trim(), rawPhone ? `+1${rawPhone}` : undefined, referralCode.trim() || undefined);
       // Navigate to email verification — backend already sent the code
       router.replace("/auth/verify-email");
     } catch (e: any) {
@@ -131,6 +132,17 @@ export default function Register() {
               />
             </TouchableOpacity>
           </View>
+
+          <Text style={[styles.label, { marginTop: space.md }]}>Referral code <Text style={styles.optional}>(optional)</Text></Text>
+          <TextInput
+            testID="register-referral-input"
+            value={referralCode}
+            onChangeText={(t) => setReferralCode(t.toUpperCase())}
+            placeholder="e.g. AB3X9KTZ"
+            placeholderTextColor={colors.textSecondary}
+            autoCapitalize="characters"
+            style={styles.input}
+          />
 
           <TouchableOpacity
             testID="register-submit-btn"

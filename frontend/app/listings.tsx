@@ -8,13 +8,18 @@ import {
   Image,
   ActivityIndicator,
   RefreshControl,
+  Alert,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { api } from "@/src/lib/api";
+import { useAuth } from "@/src/contexts/AuthContext";
 import { colors, type, space } from "@/src/theme";
+
+const SWAP_COST = 500; // points to claim a swap item
 
 type ListingItem = {
   item_id: string;
@@ -28,11 +33,13 @@ type ListingItem = {
 
 export default function Listings() {
   const router = useRouter();
+  const { user, setUser } = useAuth();
   const [tab, setTab] = useState<"mine" | "community">("mine");
   const [mine, setMine] = useState<ListingItem[]>([]);
   const [community, setCommunity] = useState<ListingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [claimingId, setClaimingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -50,6 +57,71 @@ export default function Listings() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const onRefresh = () => { setRefreshing(true); load(); };
+
+  const claimItem = async (item: ListingItem) => {
+    const isDonate = item.listing_status === "donate";
+    const pts = isDonate ? 0 : SWAP_COST;
+    const userPts = user?.points ?? 0;
+
+    const doRedeem = async () => {
+      setClaimingId(item.item_id);
+      try {
+        if (!isDonate) {
+          const res = await api<{ points_remaining: number }>("/points/redeem", {
+            method: "POST",
+            body: { amount: pts, reason: "swap_claim" },
+          });
+          if (user) setUser({ ...user, points: res.points_remaining });
+        }
+        const successMsg = isDonate
+          ? "Item claimed! Contact the owner to arrange pickup."
+          : `Swap claimed! ${pts} pts deducted. Contact the owner to arrange the swap.`;
+        if (Platform.OS === "web" && typeof window !== "undefined") {
+          window.alert(successMsg);
+        } else {
+          Alert.alert("Claimed!", successMsg);
+        }
+      } catch (e: any) {
+        const msg = e?.message || "Could not complete claim.";
+        if (Platform.OS === "web" && typeof window !== "undefined") {
+          window.alert(msg);
+        } else {
+          Alert.alert("Error", msg);
+        }
+      } finally {
+        setClaimingId(null);
+      }
+    };
+
+    if (isDonate) {
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        if (window.confirm(`Claim "${item.name || "this item"}" for free?`)) doRedeem();
+      } else {
+        Alert.alert("Claim this item?", `"${item.name || "Item"}" is free to claim.`, [
+          { text: "Cancel", style: "cancel" },
+          { text: "Claim", onPress: doRedeem },
+        ]);
+      }
+    } else {
+      if (userPts < SWAP_COST) {
+        const msg = `You need ${SWAP_COST} pts to claim this swap. You have ${userPts} pts.`;
+        if (Platform.OS === "web" && typeof window !== "undefined") {
+          window.alert(msg);
+        } else {
+          Alert.alert("Not enough points", msg);
+        }
+        return;
+      }
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        if (window.confirm(`Use ${SWAP_COST} pts to claim "${item.name || "this item"}"? You have ${userPts} pts.`)) doRedeem();
+      } else {
+        Alert.alert("Use points to swap?", `Use ${SWAP_COST} pts to claim "${item.name || "Item"}"?\nYou have ${userPts} pts.`, [
+          { text: "Cancel", style: "cancel" },
+          { text: `Use ${SWAP_COST} pts`, onPress: doRedeem },
+        ]);
+      }
+    }
+  };
 
   const data = tab === "mine" ? mine : community;
 
@@ -136,6 +208,21 @@ export default function Listings() {
                 {tab === "community" && item.owner_name ? (
                   <Text style={styles.cardOwner}>{item.owner_name}</Text>
                 ) : null}
+                {tab === "community" ? (
+                  <TouchableOpacity
+                    style={[styles.claimBtn, item.listing_status === "donate" && styles.claimBtnFree]}
+                    onPress={() => claimItem(item)}
+                    disabled={claimingId === item.item_id}
+                  >
+                    {claimingId === item.item_id ? (
+                      <ActivityIndicator size="small" color={colors.textInverse} />
+                    ) : (
+                      <Text style={styles.claimBtnText}>
+                        {item.listing_status === "donate" ? "Claim free" : `${SWAP_COST} pts`}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                ) : null}
               </View>
             </TouchableOpacity>
           )}
@@ -190,6 +277,15 @@ const styles = StyleSheet.create({
   cardName: { color: colors.text, fontSize: 13, fontWeight: "600" },
   cardBrand: { color: colors.accent, fontSize: 11, marginTop: 2 },
   cardOwner: { color: colors.textSecondary, fontSize: 11, marginTop: 2 },
+  claimBtn: {
+    marginTop: 8,
+    backgroundColor: colors.accent,
+    paddingVertical: 7,
+    alignItems: "center",
+    borderRadius: 2,
+  },
+  claimBtnFree: { backgroundColor: "rgba(197,160,89,0.6)" },
+  claimBtnText: { color: colors.textInverse, fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
   goClosetBtn: {
     marginTop: space.lg,
     paddingVertical: 12,

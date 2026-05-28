@@ -3,7 +3,8 @@ import { Platform } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
 
-import { api, setToken, clearToken, getToken } from "@/src/lib/api";
+import { api, setToken, clearToken, getToken, setDemoMode } from "@/src/lib/api";
+import { DEMO_USER } from "@/src/demo/mockData";
 
 export type User = {
   user_id: string;
@@ -21,17 +22,25 @@ export type User = {
   phone?: string | null;
   phone_verified: boolean;
   points: number;
+  stylist_persona: string;
+  plan_type: string;
+  plan_period: string;
+  plan_addons: string[];
+  subscription_status: string;
 };
 
 type AuthState = {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string, phone?: string) => Promise<void>;
+  register: (email: string, password: string, name: string, phone?: string, referralCode?: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   setUser: (u: User) => void;
+  isDemoMode: boolean;
+  enterDemoMode: () => void;
+  exitDemoMode: () => Promise<void>;
 };
 
 const Ctx = createContext<AuthState | null>(null);
@@ -45,6 +54,7 @@ export const useAuth = () => {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUserState] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -113,10 +123,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUserState(res.user);
   }, []);
 
-  const register = useCallback(async (email: string, password: string, name: string, phone?: string) => {
+  const register = useCallback(async (email: string, password: string, name: string, phone?: string, referralCode?: string) => {
     const res = await api<{ token: string; user: User }>("/auth/register", {
       method: "POST",
-      body: { email, password, name, ...(phone ? { phone } : {}) },
+      body: {
+        email,
+        password,
+        name,
+        ...(phone ? { phone } : {}),
+        ...(referralCode ? { referral_code: referralCode } : {}),
+      },
       auth: false,
     });
     await setToken(res.token);
@@ -176,9 +192,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUserState(null);
   }, []);
 
+  const enterDemoMode = () => {
+    setDemoMode(true);
+    setUserState(DEMO_USER);
+    setIsDemoMode(true);
+  };
+
+  const exitDemoMode = async () => {
+    setDemoMode(false);
+    setUserState(null);
+    setIsDemoMode(false);
+    await clearToken();
+  };
+
   return (
     <Ctx.Provider
-      value={{ user, loading, login, register, loginWithGoogle, logout, refresh, setUser: setUserState }}
+      value={{ user, loading, login, register, loginWithGoogle, logout, refresh, setUser: setUserState, isDemoMode, enterDemoMode, exitDemoMode }}
     >
       {children}
     </Ctx.Provider>

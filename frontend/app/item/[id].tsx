@@ -21,10 +21,15 @@ type Item = {
   item_id: string;
   name: string;
   image_base64: string;
+  image_url?: string;
   tags: any;
   favorite: boolean;
   brand?: string | null;
   listing_status?: string | null;
+  times_worn?: number;
+  last_worn_at?: string | null;
+  price?: number | null;
+  purchased_at?: string | null;
 };
 
 export default function ItemDetail() {
@@ -86,6 +91,14 @@ export default function ItemDetail() {
     } catch {}
   };
 
+  const markWorn = async () => {
+    if (!item) return;
+    try {
+      const res = await api<{ item: Item }>(`/items/${item.item_id}/wear`, { method: "POST" });
+      setItem(res.item);
+    } catch {}
+  };
+
   if (loading) {
     return (
       <View style={styles.loading}>
@@ -106,7 +119,7 @@ export default function ItemDetail() {
   return (
     <View style={styles.root} testID="item-detail-screen">
       <Image
-        source={{ uri: `data:image/jpeg;base64,${item.image_base64}` }}
+        source={{ uri: item.image_url || (item.image_base64 ? `data:image/jpeg;base64,${item.image_base64}` : undefined) }}
         style={styles.image}
       />
       <SafeAreaView style={styles.topOverlay} edges={["top"]} pointerEvents="box-none">
@@ -146,6 +159,40 @@ export default function ItemDetail() {
         {t.occasion?.length ? (
           <Section label="Occasion">
             <Text style={styles.line}>{t.occasion.join(" · ")}</Text>
+          </Section>
+        ) : null}
+
+        {/* Wear Stats */}
+        <Section label="Wear Stats">
+          <Text style={styles.line}>
+            Worn {item.times_worn ?? 0} {(item.times_worn ?? 0) === 1 ? "time" : "times"}
+          </Text>
+          <Text style={[styles.line, { color: colors.textSecondary, marginTop: 4 }]}>
+            {item.last_worn_at
+              ? `Last worn: ${new Date(item.last_worn_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}`
+              : "Never worn"}
+          </Text>
+          <TouchableOpacity
+            testID="item-mark-worn-btn"
+            style={styles.wornBtn}
+            onPress={markWorn}
+          >
+            <Ionicons name="checkmark-circle-outline" size={16} color={colors.accent} />
+            <Text style={styles.wornBtnText}>Mark as worn</Text>
+          </TouchableOpacity>
+        </Section>
+
+        {/* Purchase Info */}
+        {(item.price != null || item.purchased_at) ? (
+          <Section label="Purchase Info">
+            {item.price != null ? (
+              <Text style={styles.line}>${item.price.toFixed(2)}</Text>
+            ) : null}
+            {item.purchased_at ? (
+              <Text style={[styles.line, { color: colors.textSecondary, marginTop: 4 }]}>
+                Purchased: {item.purchased_at}
+              </Text>
+            ) : null}
           </Section>
         ) : null}
 
@@ -281,4 +328,17 @@ const styles = StyleSheet.create({
   listingBadgeText: { color: colors.text, fontSize: 13, fontWeight: "600" },
   removeListing: { paddingVertical: 4 },
   removeListingText: { color: colors.textSecondary, fontSize: 12, textDecorationLine: "underline" },
+  wornBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    alignSelf: "flex-start",
+    borderRadius: 2,
+  },
+  wornBtnText: { color: colors.accent, fontSize: 13, fontWeight: "600" },
 });

@@ -34,6 +34,7 @@ type Outfit = {
   item_ids: string[];
   occasion: string;
   favorite: boolean;
+  rating?: number | null;
   created_at: string;
 };
 
@@ -57,17 +58,28 @@ export default function Looks() {
         api<{ outfits: Outfit[] }>("/outfits"),
         api<{ items: Item[] }>("/items"),
       ]);
-      setLookbooks(lb.lookbooks);
-      setOutfits(of.outfits);
+      setLookbooks(lb.lookbooks || []);
+      setOutfits(of.outfits || []);
       const map: Record<string, Item> = {};
-      it.items.forEach((i) => (map[i.item_id] = i));
+      (it.items || []).forEach((i) => (map[i.item_id] = i));
       setItems(map);
+    } catch {
+      // keep whatever was loaded before, don't crash the screen
     } finally {
       setLoading(false);
     }
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const rateOutfit = async (outfitId: string, rating: number) => {
+    try {
+      await api(`/outfits/${outfitId}/rating`, { method: "PATCH", body: { rating } });
+      setOutfits((prev) =>
+        prev.map((o) => (o.outfit_id === outfitId ? { ...o, rating } : o))
+      );
+    } catch {}
+  };
 
   return (
     <SafeAreaView style={styles.root} edges={["top", "left", "right"]} testID="looks-screen">
@@ -158,6 +170,22 @@ export default function Looks() {
                   <Text style={styles.savedDesc} numberOfLines={2}>
                     {o.description}
                   </Text>
+                  <View style={styles.starsRow}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <TouchableOpacity
+                        key={star}
+                        onPress={() => rateOutfit(o.outfit_id, star)}
+                        testID={`outfit-star-${o.outfit_id}-${star}`}
+                        hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                      >
+                        <Ionicons
+                          name={star <= (o.rating ?? 0) ? "star" : "star-outline"}
+                          size={16}
+                          color={star <= (o.rating ?? 0) ? "#C5A059" : colors.textSecondary}
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
               </View>
             ))
@@ -198,4 +226,5 @@ const styles = StyleSheet.create({
   savedThumb: { width: "25%", aspectRatio: 1, padding: 2 },
   savedTitle: { color: colors.text, fontSize: 16, fontWeight: "700" },
   savedDesc: { color: colors.textSecondary, fontSize: 12, marginTop: 4, lineHeight: 18 },
+  starsRow: { flexDirection: "row", gap: 4, marginTop: 8 },
 });

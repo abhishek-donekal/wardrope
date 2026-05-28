@@ -16,7 +16,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 
-import { api } from "@/src/lib/api";
+import { api, uploadImageToS3 } from "@/src/lib/api";
 import { colors, type, space } from "@/src/theme";
 
 
@@ -34,12 +34,15 @@ type Tags = {
 
 export default function AddItem() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ prefill_name?: string; prefill_brand?: string }>();
-  const [imageBase64, setImageBase64] = useState<string | null>(null);
+  const params = useLocalSearchParams<{ prefill_name?: string; prefill_brand?: string; closet_id?: string }>();
+  const [pickedUri, setPickedUri] = useState<string | null>(null);
+  const [publicUrl, setPublicUrl] = useState<string | null>(null);
   const [tags, setTags] = useState<Tags | null>(null);
   const [name, setName] = useState(params.prefill_name || "");
   const [brand, setBrand] = useState(params.prefill_brand || "");
-  const [busy, setBusy] = useState<"idle" | "picking" | "tagging" | "saving">("idle");
+  const [priceInput, setPriceInput] = useState("");
+  const [purchaseDateInput, setPurchaseDateInput] = useState("");
+  const [busy, setBusy] = useState<"idle" | "picking" | "uploading" | "tagging" | "saving">("idle");
 
   const ensureCameraPerm = async (): Promise<boolean> => {
     const cur = await ImagePicker.getCameraPermissionsAsync();
@@ -77,17 +80,27 @@ export default function AddItem() {
     return req.granted;
   };
 
-  const handleResult = async (b64?: string | null) => {
-    if (!b64) {
+  const handleResult = async (uri?: string | null) => {
+    if (!uri) {
       setBusy("idle");
       return;
     }
-    setImageBase64(b64);
+    setPickedUri(uri);
+    setBusy("uploading");
+    let uploadedUrl: string;
+    try {
+      uploadedUrl = await uploadImageToS3(uri, "item.jpg");
+      setPublicUrl(uploadedUrl);
+    } catch (e: any) {
+      Alert.alert("Upload failed", e?.message || "Could not upload image");
+      setBusy("idle");
+      return;
+    }
     setBusy("tagging");
     try {
       const res = await api<{ tags: Tags }>("/ai/tag-item", {
         method: "POST",
-        body: { image_base64: b64 },
+        body: { image_url: uploadedUrl },
       });
       setTags(res.tags);
       // Only set name from AI if not pre-filled (e.g. from barcode scan)
@@ -104,12 +117,11 @@ export default function AddItem() {
     setBusy("picking");
     try {
       const r = await ImagePicker.launchCameraAsync({
-        base64: true,
         quality: 0.7,
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
       });
       if (r.canceled) return setBusy("idle");
-      await handleResult(r.assets?.[0]?.base64);
+      await handleResult(r.assets?.[0]?.uri);
     } catch {
       setBusy("idle");
     }
@@ -120,28 +132,31 @@ export default function AddItem() {
     setBusy("picking");
     try {
       const r = await ImagePicker.launchImageLibraryAsync({
-        base64: true,
         quality: 0.7,
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
       });
       if (r.canceled) return setBusy("idle");
-      await handleResult(r.assets?.[0]?.base64);
+      await handleResult(r.assets?.[0]?.uri);
     } catch {
       setBusy("idle");
     }
   };
 
   const save = async () => {
-    if (!imageBase64 || !tags) return;
+    if (!publicUrl || !tags) return;
     setBusy("saving");
     try {
+      const parsedPrice = priceInput.trim() ? parseFloat(priceInput) : undefined;
       await api("/items", {
         method: "POST",
         body: {
-          image_base64: imageBase64,
+          image_url: publicUrl,
           name: name || tags.description,
           tags,
           ...(brand.trim() ? { brand: brand.trim() } : {}),
+          ...(parsedPrice != null && !isNaN(parsedPrice) ? { price: parsedPrice } : {}),
+          ...(purchaseDateInput.trim() ? { purchased_at: purchaseDateInput.trim() } : {}),
+          ...(params.closet_id ? { closet_id: params.closet_id } : {}),
         },
       });
       router.back();
@@ -163,7 +178,7 @@ export default function AddItem() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
-        {!imageBase64 ? (
+        {!pickedUri ? (
           <View style={styles.choose}>
             <Text style={[type.h2, { marginBottom: space.md }]}>Show us the piece</Text>
             <Text style={[type.bodySm, { marginBottom: space.xl }]}>
@@ -201,11 +216,16 @@ export default function AddItem() {
         ) : (
           <View>
             <Image
-              source={{ uri: `data:image/jpeg;base64,${imageBase64}` }}
+              source={{ uri: pickedUri }}
               style={styles.preview}
             />
 
-            {busy === "tagging" ? (
+            {busy === "uploading" ? (
+              <View style={styles.tagging}>
+                <ActivityIndicator color={colors.accent} />
+                <Text style={[type.bodySm, { marginLeft: 12 }]}>Uploading image…</Text>
+              </View>
+            ) : busy === "tagging" ? (
               <View style={styles.tagging}>
                 <ActivityIndicator color={colors.accent} />
                 <Text style={[type.bodySm, { marginLeft: 12 }]}>AI is reading the garment…</Text>
@@ -246,11 +266,32 @@ export default function AddItem() {
                   <TagPill label="Season" value={(tags.season || []).join(", ")} />
                 </View>
 
+                <Text style={styles.label}>Price paid (optional)</Text>
+                <TextInput
+                  testID="add-item-price-input"
+                  value={priceInput}
+                  onChangeText={setPriceInput}
+                  placeholder="0.00"
+                  placeholderTextColor={colors.textSecondary}
+                  keyboardType="decimal-pad"
+                  style={styles.input}
+                />
+
+                <Text style={styles.label}>Purchase date (optional)</Text>
+                <TextInput
+                  testID="add-item-purchase-date-input"
+                  value={purchaseDateInput}
+                  onChangeText={setPurchaseDateInput}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={colors.textSecondary}
+                  style={styles.input}
+                />
+
                 <TouchableOpacity
                   testID="add-item-save-btn"
-                  style={[styles.primaryBtn, busy === "saving" && { opacity: 0.6 }]}
+                  style={[styles.primaryBtn, (busy === "saving" || busy === "uploading" || busy === "tagging") && { opacity: 0.6 }]}
                   onPress={save}
-                  disabled={busy === "saving"}
+                  disabled={busy === "saving" || busy === "uploading" || busy === "tagging"}
                 >
                   {busy === "saving" ? (
                     <ActivityIndicator color={colors.textInverse} />
@@ -263,7 +304,8 @@ export default function AddItem() {
                   testID="add-item-retake-btn"
                   style={styles.secondaryBtn}
                   onPress={() => {
-                    setImageBase64(null);
+                    setPickedUri(null);
+                    setPublicUrl(null);
                     setTags(null);
                   }}
                 >
