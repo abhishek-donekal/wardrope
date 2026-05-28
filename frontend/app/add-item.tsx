@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   ScrollView,
   Alert,
-  Platform,
   Linking,
   TextInput,
 } from "react-native";

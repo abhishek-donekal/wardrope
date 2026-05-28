@@ -48,7 +48,7 @@ const DEFAULT_FILTERS = [
 
 export default function Closet() {
   const router = useRouter();
-  const { user } = useAuth();
+  useAuth(); // auth context required for API calls
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [filter, setFilter] = useState("all");
@@ -77,7 +77,7 @@ export default function Closet() {
       ]);
       setItems(itemRes.items);
       setCategories(catRes.categories || []);
-    } catch (e) {
+    } catch {
       // ignore
     } finally {
       setLoading(false);
@@ -96,7 +96,7 @@ export default function Closet() {
       setCategories((prev) => [...prev, name]);
       setNewCatName("");
       setShowAddCat(false);
-    } catch (e: any) {
+    } catch {
       // ignore duplicate errors silently
     } finally {
       setAddingCat(false);

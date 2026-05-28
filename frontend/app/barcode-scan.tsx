@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -88,7 +87,7 @@ export default function BarcodeScanner() {
           <View style={{ width: 26 }} />
         </View>
         <View style={styles.center}>
-          <Ionicons name="camera-off-outline" size={48} color={colors.textSecondary} />
+          <Ionicons name="camera-outline" size={48} color={colors.textSecondary} />
           <Text style={[type.body, { marginTop: space.md, textAlign: "center" }]}>
             Camera access is required to scan barcodes.
           </Text>
@@ -173,7 +172,7 @@ export default function BarcodeScanner() {
               <Ionicons name="help-circle-outline" size={40} color={colors.textSecondary} />
               <Text style={[type.h3, { marginTop: space.md }]}>Product not found</Text>
               <Text style={[type.bodySm, { marginTop: 8, textAlign: "center", maxWidth: 280 }]}>
-                This barcode isn't in our database. You can still add the item manually.
+                This barcode is not in our database. You can still add the item manually.
               </Text>
               <TouchableOpacity style={[styles.primaryBtn, { marginTop: space.xl }]} onPress={() => router.replace("/add-item")}>
                 <Text style={styles.primaryBtnText}>Add manually</Text>

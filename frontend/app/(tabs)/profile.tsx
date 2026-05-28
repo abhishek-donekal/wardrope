@@ -175,7 +175,7 @@ export default function Profile() {
           />
         </Section>
 
-        <Text style={styles.footer}>What's In My Wardrobe · v0.1</Text>
+        <Text style={styles.footer}>{"What's In My Wardrobe · v0.1"}</Text>
       </ScrollView>
     </View>
   );
