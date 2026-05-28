@@ -81,12 +81,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const hash = window.location.hash || "";
     const search = window.location.search || "";
     let sid: string | null = null;
-    if (hash.includes("session_id=")) {
-      sid = new URLSearchParams(hash.replace(/^#/, "")).get("session_id");
-    } else if (search.includes("session_id=")) {
-      sid = new URLSearchParams(search).get("session_id");
+    const hashParams = new URLSearchParams(hash.replace(/^#/, ""));
+    const searchParams = new URLSearchParams(search);
+    sid = hashParams.get("session_id") || hashParams.get("session_token") ||
+          searchParams.get("session_id") || searchParams.get("session_token");
+    // If no session_id found, check what params ARE in the URL for debugging
+    if (!sid) {
+      if (search || hash) {
+        setGoogleAuthError(`Sign-in redirect received but missing session token. URL params: ${search}${hash}`);
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+      return false;
     }
-    if (!sid) return false;
     try {
       const res = await api<{ token: string; user: User }>("/auth/google/session", {
         method: "POST",

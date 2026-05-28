@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -27,7 +27,14 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(googleAuthError);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (googleAuthError) {
+      setErr(googleAuthError);
+      clearGoogleAuthError();
+    }
+  }, [googleAuthError]);
 
   const submit = async () => {
     if (!email || !password) {
