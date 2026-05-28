@@ -131,13 +131,14 @@ export default function CameraRollScan() {
             </TouchableOpacity>
           </View>
         ) : (
-          {busy && uploadProgress ? (
-            <View style={styles.progressRow}>
-              <ActivityIndicator color={colors.accent} />
-              <Text style={[type.bodySm, { marginLeft: 10 }]}>{uploadProgress}</Text>
-            </View>
-          ) : null}
-          <TouchableOpacity
+          <>
+            {busy && uploadProgress ? (
+              <View style={styles.progressRow}>
+                <ActivityIndicator color={colors.accent} />
+                <Text style={[type.bodySm, { marginLeft: 10 }]}>{uploadProgress}</Text>
+              </View>
+            ) : null}
+            <TouchableOpacity
             testID="scan-process-btn"
             style={[styles.primaryBtn, (picked.length === 0 || busy) && { opacity: 0.4 }]}
             onPress={scan}
@@ -149,6 +150,7 @@ export default function CameraRollScan() {
               <Text style={styles.primaryBtnText}>Scan {picked.length || ""} photos</Text>
             )}
           </TouchableOpacity>
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
