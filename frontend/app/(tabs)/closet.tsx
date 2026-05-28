@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
   ImageBackground,
   ScrollView,
+  TextInput,
+  Modal,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -34,7 +36,7 @@ type Item = {
   favorite?: boolean;
 };
 
-const FILTERS = [
+const DEFAULT_FILTERS = [
   { id: "all", label: "All" },
   { id: "tops", label: "Tops" },
   { id: "bottoms", label: "Bottoms" },
@@ -48,14 +50,33 @@ export default function Closet() {
   const router = useRouter();
   const { user } = useAuth();
   const [items, setItems] = useState<Item[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
   const [filter, setFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showAddCat, setShowAddCat] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [addingCat, setAddingCat] = useState(false);
+
+  const filters = useMemo(() => {
+    const custom = categories.filter(
+      (c) => !DEFAULT_FILTERS.some((f) => f.id === c)
+    );
+    const customChips = custom.map((c) => ({
+      id: c,
+      label: c.charAt(0).toUpperCase() + c.slice(1),
+    }));
+    return [...DEFAULT_FILTERS, ...customChips];
+  }, [categories]);
 
   const load = useCallback(async () => {
     try {
-      const res = await api<{ items: Item[] }>("/items");
-      setItems(res.items);
+      const [itemRes, catRes] = await Promise.all([
+        api<{ items: Item[] }>("/items"),
+        api<{ categories: string[] }>("/users/me/categories").catch(() => ({ categories: [] })),
+      ]);
+      setItems(itemRes.items);
+      setCategories(catRes.categories || []);
     } catch (e) {
       // ignore
     } finally {
@@ -65,6 +86,22 @@ export default function Closet() {
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const addCategory = async () => {
+    const name = newCatName.trim().toLowerCase();
+    if (!name) return;
+    setAddingCat(true);
+    try {
+      await api("/users/me/categories", { method: "POST", body: { name } });
+      setCategories((prev) => [...prev, name]);
+      setNewCatName("");
+      setShowAddCat(false);
+    } catch (e: any) {
+      // ignore duplicate errors silently
+    } finally {
+      setAddingCat(false);
+    }
+  };
 
   const filtered = useMemo(
     () => (filter === "all" ? items : items.filter((i) => i.tags?.category === filter)),
@@ -106,7 +143,7 @@ export default function Closet() {
         style={styles.filterRow}
         contentContainerStyle={styles.filterRowContent}
       >
-        {FILTERS.map((f) => {
+        {filters.map((f) => {
           const active = filter === f.id;
           return (
             <TouchableOpacity
@@ -119,7 +156,40 @@ export default function Closet() {
             </TouchableOpacity>
           );
         })}
+        <TouchableOpacity
+          testID="closet-filter-add"
+          onPress={() => setShowAddCat(true)}
+          style={[styles.filterChip, { borderStyle: "dashed" }]}
+        >
+          <Ionicons name="add" size={14} color={colors.textSecondary} />
+        </TouchableOpacity>
       </ScrollView>
+
+      {/* Add category modal */}
+      <Modal visible={showAddCat} transparent animationType="fade" onRequestClose={() => setShowAddCat(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[type.overline, { marginBottom: space.md }]}>New Category</Text>
+            <TextInput
+              value={newCatName}
+              onChangeText={setNewCatName}
+              placeholder="e.g. Gym, Beach, Work"
+              placeholderTextColor={colors.textSecondary}
+              style={styles.modalInput}
+              autoFocus
+              onSubmitEditing={addCategory}
+            />
+            <View style={{ flexDirection: "row", gap: 10, marginTop: space.md }}>
+              <TouchableOpacity style={styles.modalCancel} onPress={() => { setShowAddCat(false); setNewCatName(""); }}>
+                <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalConfirm, addingCat && { opacity: 0.5 }]} onPress={addCategory} disabled={addingCat}>
+                <Text style={{ color: colors.textInverse, fontSize: 14, fontWeight: "700" }}>Add</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {filtered.length === 0 ? (
         <Empty filter={filter} onAdd={() => router.push("/add-item")} onScan={() => router.push("/scan/camera-roll")} />
@@ -246,4 +316,40 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   secondaryBtnText: { color: colors.text, fontWeight: "600", letterSpacing: 0.5 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalBox: {
+    backgroundColor: colors.bgSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: space.lg,
+    width: 300,
+    borderRadius: 4,
+  },
+  modalInput: {
+    color: colors.text,
+    fontSize: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+    paddingVertical: 10,
+  },
+  modalCancel: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 2,
+  },
+  modalConfirm: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: "center",
+    backgroundColor: colors.accent,
+    borderRadius: 2,
+  },
 });

@@ -13,12 +13,13 @@ import {
   TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 
 import { api } from "@/src/lib/api";
 import { colors, type, space } from "@/src/theme";
+
 
 type Tags = {
   type?: string;
@@ -34,9 +35,11 @@ type Tags = {
 
 export default function AddItem() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ prefill_name?: string; prefill_brand?: string }>();
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [tags, setTags] = useState<Tags | null>(null);
-  const [name, setName] = useState("");
+  const [name, setName] = useState(params.prefill_name || "");
+  const [brand, setBrand] = useState(params.prefill_brand || "");
   const [busy, setBusy] = useState<"idle" | "picking" | "tagging" | "saving">("idle");
 
   const ensureCameraPerm = async (): Promise<boolean> => {
@@ -88,7 +91,8 @@ export default function AddItem() {
         body: { image_base64: b64 },
       });
       setTags(res.tags);
-      setName(res.tags.description || res.tags.type || "");
+      // Only set name from AI if not pre-filled (e.g. from barcode scan)
+      setName((prev) => prev || res.tags.description || res.tags.type || "");
     } catch (e: any) {
       Alert.alert("AI tagging failed", e?.message || "Unknown error");
     } finally {
@@ -134,7 +138,12 @@ export default function AddItem() {
     try {
       await api("/items", {
         method: "POST",
-        body: { image_base64: imageBase64, name: name || tags.description, tags },
+        body: {
+          image_base64: imageBase64,
+          name: name || tags.description,
+          tags,
+          ...(brand.trim() ? { brand: brand.trim() } : {}),
+        },
       });
       router.back();
     } catch (e: any) {
@@ -177,6 +186,18 @@ export default function AddItem() {
                 <Text style={styles.bigBtnSub}>Choose an existing photo</Text>
               </View>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              testID="add-item-barcode-btn"
+              style={[styles.bigBtn, { marginTop: 0, borderStyle: "dashed" }]}
+              onPress={() => router.push("/barcode-scan")}
+            >
+              <Ionicons name="barcode-outline" size={28} color={colors.textSecondary} />
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <Text style={[styles.bigBtnTitle, { color: colors.textSecondary }]}>Scan a barcode</Text>
+                <Text style={styles.bigBtnSub}>Auto-fill name and brand</Text>
+              </View>
+            </TouchableOpacity>
           </View>
         ) : (
           <View>
@@ -202,6 +223,16 @@ export default function AddItem() {
                   value={name}
                   onChangeText={setName}
                   placeholder="e.g. Cream silk blouse"
+                  placeholderTextColor={colors.textSecondary}
+                  style={styles.input}
+                />
+
+                <Text style={styles.label}>Brand (optional)</Text>
+                <TextInput
+                  testID="add-item-brand-input"
+                  value={brand}
+                  onChangeText={setBrand}
+                  placeholder="e.g. Zara, H&M"
                   placeholderTextColor={colors.textSecondary}
                   style={styles.input}
                 />

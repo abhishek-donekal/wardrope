@@ -16,7 +16,7 @@ export async function clearToken(): Promise<void> {
 }
 
 export type ApiOpts = {
-  method?: "GET" | "POST" | "PUT" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: any;
   auth?: boolean;
 };

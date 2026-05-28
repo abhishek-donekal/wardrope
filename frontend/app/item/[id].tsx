@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -22,6 +23,8 @@ type Item = {
   image_base64: string;
   tags: any;
   favorite: boolean;
+  brand?: string | null;
+  listing_status?: string | null;
 };
 
 export default function ItemDetail() {
@@ -52,6 +55,11 @@ export default function ItemDetail() {
   };
 
   const onDelete = () => {
+    if (Platform.OS === "web") {
+      if (!window.confirm("Delete this item? This cannot be undone.")) return;
+      api(`/items/${id}`, { method: "DELETE" }).then(() => router.back()).catch(() => {});
+      return;
+    }
     Alert.alert("Delete item", "This cannot be undone.", [
       { text: "Cancel", style: "cancel" },
       {
@@ -65,6 +73,17 @@ export default function ItemDetail() {
         },
       },
     ]);
+  };
+
+  const setListing = async (status: string | null) => {
+    if (!item) return;
+    try {
+      const res = await api<{ item: Item }>(`/items/${item.item_id}/listing`, {
+        method: "PATCH",
+        body: { status },
+      });
+      setItem(res.item);
+    } catch {}
   };
 
   if (loading) {
@@ -108,6 +127,9 @@ export default function ItemDetail() {
       <ScrollView style={styles.sheet} contentContainerStyle={styles.sheetContent}>
         <Text style={type.overline}>{t.category || "Item"}</Text>
         <Text style={[type.h2, { marginTop: 4 }]}>{item.name || t.description}</Text>
+        {item.brand ? (
+          <Text style={styles.brandText}>{item.brand}</Text>
+        ) : null}
 
         <View style={styles.tagsRow}>
           {t.color ? <Pill text={t.color} /> : null}
@@ -126,6 +148,45 @@ export default function ItemDetail() {
             <Text style={styles.line}>{t.occasion.join(" · ")}</Text>
           </Section>
         ) : null}
+
+        {/* Donate / Swap listing */}
+        <Section label="List this item">
+          {!item.listing_status ? (
+            <View style={styles.listingRow}>
+              <TouchableOpacity
+                testID="item-donate-btn"
+                style={styles.listingBtn}
+                onPress={() => setListing("donate")}
+              >
+                <Ionicons name="heart-outline" size={16} color={colors.text} />
+                <Text style={styles.listingBtnText}>Donate</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="item-swap-btn"
+                style={styles.listingBtn}
+                onPress={() => setListing("swap")}
+              >
+                <Ionicons name="swap-horizontal-outline" size={16} color={colors.text} />
+                <Text style={styles.listingBtnText}>Swap</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.listingActiveRow}>
+              <View style={[styles.listingBadge, item.listing_status === "donate" ? styles.badgeDonate : styles.badgeSwap]}>
+                <Text style={styles.listingBadgeText}>
+                  {item.listing_status === "donate" ? "Listed for Donate" : "Listed for Swap"}
+                </Text>
+              </View>
+              <TouchableOpacity
+                testID="item-remove-listing-btn"
+                onPress={() => setListing(null)}
+                style={styles.removeListing}
+              >
+                <Text style={styles.removeListingText}>Remove listing</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </Section>
 
         <TouchableOpacity testID="item-delete-btn" style={styles.deleteBtn} onPress={onDelete}>
           <Ionicons name="trash-outline" size={16} color={"#FF7A7A"} />
@@ -194,4 +255,30 @@ const styles = StyleSheet.create({
     borderColor: "#722F37",
   },
   deleteText: { color: "#FF7A7A", fontSize: 13, letterSpacing: 0.5 },
+  brandText: { color: colors.accent, fontSize: 13, marginTop: 4, letterSpacing: 0.5 },
+  listingRow: { flexDirection: "row", gap: 10 },
+  listingBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 2,
+  },
+  listingBtnText: { color: colors.text, fontSize: 14 },
+  listingActiveRow: { gap: 8 },
+  listingBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 2,
+    alignSelf: "flex-start",
+  },
+  badgeDonate: { backgroundColor: "rgba(197,160,89,0.15)", borderWidth: 1, borderColor: colors.accent },
+  badgeSwap: { backgroundColor: "rgba(100,160,197,0.15)", borderWidth: 1, borderColor: "#64A0C5" },
+  listingBadgeText: { color: colors.text, fontSize: 13, fontWeight: "600" },
+  removeListing: { paddingVertical: 4 },
+  removeListingText: { color: colors.textSecondary, fontSize: 12, textDecorationLine: "underline" },
 });

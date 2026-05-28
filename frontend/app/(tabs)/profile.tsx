@@ -18,6 +18,13 @@ import { api } from "@/src/lib/api";
 import { useAuth } from "@/src/contexts/AuthContext";
 import { colors, type, space } from "@/src/theme";
 
+function pointsLevel(pts: number): string {
+  if (pts >= 1000) return "Platinum";
+  if (pts >= 500) return "Gold";
+  if (pts >= 100) return "Silver";
+  return "Bronze";
+}
+
 export default function Profile() {
   const { user, logout, setUser } = useAuth();
   const router = useRouter();
@@ -97,6 +104,16 @@ export default function Profile() {
           <Stat label="Plan" value={"Free"} />
         </View>
 
+        {/* Points badge */}
+        {user && (
+          <View style={styles.pointsRow}>
+            <Ionicons name="trophy-outline" size={16} color={colors.accent} />
+            <Text style={styles.pointsText}>
+              {user.points ?? 0} pts · {pointsLevel(user.points ?? 0)}
+            </Text>
+          </View>
+        )}
+
         <Section title="Wardrobe">
           <Row
             icon="add-circle-outline"
@@ -111,9 +128,23 @@ export default function Profile() {
             onPress={() => router.push("/scan/camera-roll")}
             testID="profile-row-camera-roll"
           />
+          <Row
+            icon="swap-horizontal-outline"
+            label="Donate & Swap"
+            sub="List items for others"
+            onPress={() => router.push("/listings")}
+            testID="profile-row-listings"
+          />
         </Section>
 
         <Section title="Personalization">
+          <Row
+            icon="pricetags-outline"
+            label="Manage categories"
+            sub="Add custom clothing categories"
+            onPress={() => router.push("/manage-categories")}
+            testID="profile-row-categories"
+          />
           <Row
             icon="options-outline"
             label="Cataloging fidelity"
@@ -240,4 +271,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   footer: { color: colors.textSecondary, textAlign: "center", marginTop: space.xxl, fontSize: 11 },
+  pointsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: space.md,
+    paddingHorizontal: 4,
+  },
+  pointsText: { color: colors.accent, fontSize: 13, fontWeight: "600" },
 });

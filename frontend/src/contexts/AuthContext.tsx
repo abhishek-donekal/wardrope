@@ -20,6 +20,7 @@ export type User = {
   email_verified: boolean;
   phone?: string | null;
   phone_verified: boolean;
+  points: number;
 };
 
 type AuthState = {

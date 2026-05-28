@@ -111,6 +111,7 @@ class UserOut(BaseModel):
     email_verified: bool = False
     phone: Optional[str] = None
     phone_verified: bool = False
+    points: int = 0
     created_at: datetime
 
 
@@ -136,11 +137,24 @@ class ItemTags(BaseModel):
     description: str = ""
 
 
+class BarcodeIn(BaseModel):
+    barcode: str
+
+
 class CreateItemIn(BaseModel):
     image_base64: str
     name: Optional[str] = None
     tags: Optional[ItemTags] = None
     fidelity_mode: Optional[str] = "descriptive"
+    brand: Optional[str] = None
+
+
+class AddCategoryIn(BaseModel):
+    name: str
+
+
+class ListingUpdateIn(BaseModel):
+    status: Optional[str] = None  # "donate" | "swap" | null
 
 
 class UpdateItemIn(BaseModel):
@@ -160,6 +174,7 @@ class ItemOut(BaseModel):
     product_name: Optional[str] = None
     product_url: Optional[str] = None
     favorite: bool = False
+    listing_status: Optional[str] = None
     created_at: datetime
 
 
@@ -302,6 +317,36 @@ async def check_verification_code(target: str, code_type: str, code: str) -> boo
     return True
 
 
+async def award_points(user_id: str, amount: int, reason: str = "") -> int:
+    """Award points to a user and return the new total."""
+    if db is None:
+        return 0
+    result = await db.users.find_one_and_update(
+        {"user_id": user_id},
+        {"$inc": {"points": amount}},
+        return_document=True,
+        projection={"points": 1},
+    )
+    pts = result.get("points", 0) if result else 0
+    logger.info(f"Points awarded: user={user_id} +{amount} ({reason}) -> total={pts}")
+    return pts
+
+
+POINTS_LEVELS = [
+    (1000, "Platinum"),
+    (500, "Gold"),
+    (100, "Silver"),
+    (0, "Bronze"),
+]
+
+
+def points_level(pts: int) -> str:
+    for threshold, label in POINTS_LEVELS:
+        if pts >= threshold:
+            return label
+    return "Bronze"
+
+
 async def send_welcome_email(email: str, name: str) -> None:
     first = name.split()[0] if name else "there"
     await send_email(
@@ -413,6 +458,7 @@ def user_to_out(u: Dict[str, Any]) -> UserOut:
         email_verified=u.get("email_verified", False),
         phone=u.get("phone"),
         phone_verified=u.get("phone_verified", False),
+        points=u.get("points", 0),
         created_at=u.get("created_at", utcnow()),
     )
 
@@ -555,6 +601,7 @@ async def verify_email_endpoint(body: VerifyEmailIn, current=Depends(get_current
     if not ok:
         raise HTTPException(status_code=400, detail="Invalid or expired code")
     await db.users.update_one({"user_id": current["user_id"]}, {"$set": {"email_verified": True}})
+    await award_points(current["user_id"], 25, "email_verified")
     user_doc = await db.users.find_one({"user_id": current["user_id"]}, {"_id": 0})
     # Send welcome email after successful email verification
     asyncio.create_task(send_welcome_email(user_doc["email"], user_doc.get("name", "")))
@@ -583,6 +630,7 @@ async def verify_phone_endpoint(body: VerifyPhoneIn, current=Depends(get_current
         {"user_id": current["user_id"]},
         {"$set": {"phone": phone, "phone_verified": True}},
     )
+    await award_points(current["user_id"], 25, "phone_verified")
     user_doc = await db.users.find_one({"user_id": current["user_id"]}, {"_id": 0})
     return {"ok": True, "user": user_to_out(user_doc).model_dump()}
 
@@ -592,6 +640,9 @@ async def update_profile(body: ProfileUpdate, current=Depends(get_current_user))
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
     if updates:
         await db.users.update_one({"user_id": current["user_id"]}, {"$set": updates})
+    # Award points when onboarding completes for the first time
+    if body.onboarding_complete and not current.get("onboarding_complete"):
+        await award_points(current["user_id"], 50, "onboarding_complete")
     user = await db.users.find_one({"user_id": current["user_id"]}, {"_id": 0})
     return {"user": user_to_out(user).model_dump()}
 
@@ -694,6 +745,7 @@ def item_doc_to_out(d: Dict[str, Any]) -> ItemOut:
         product_name=d.get("product_name"),
         product_url=d.get("product_url"),
         favorite=d.get("favorite", False),
+        listing_status=d.get("listing_status"),
         created_at=d.get("created_at", utcnow()),
     )
 
@@ -780,6 +832,38 @@ async def ai_stylist(body: StylistRequest, current=Depends(get_current_user)):
 
 
 # ---------------------- Items CRUD ----------------------
+@api.post("/items/barcode-lookup")
+async def barcode_lookup(body: BarcodeIn, current=Depends(get_current_user)):
+    """Look up a product by UPC/EAN barcode using the free UPCitemdb trial API."""
+    barcode = body.barcode.strip()
+    if not barcode:
+        raise HTTPException(status_code=400, detail="barcode required")
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as cli:
+            r = await cli.get(
+                f"https://api.upcitemdb.com/prod/trial/lookup",
+                params={"upc": barcode},
+                headers={"Accept": "application/json"},
+            )
+        if r.status_code == 200:
+            data = r.json()
+            items_list = data.get("items") or []
+            if items_list:
+                first = items_list[0]
+                images = first.get("images") or []
+                return {
+                    "found": True,
+                    "name": first.get("title") or first.get("description") or "",
+                    "brand": first.get("brand") or "",
+                    "description": first.get("description") or "",
+                    "image_url": images[0] if images else None,
+                }
+        return {"found": False}
+    except Exception as e:
+        logger.error(f"barcode_lookup error: {e}")
+        return {"found": False}
+
+
 @api.post("/items")
 async def create_item(body: CreateItemIn, current=Depends(get_current_user)):
     image_b64 = _strip_data_url(body.image_base64)
@@ -794,15 +878,17 @@ async def create_item(body: CreateItemIn, current=Depends(get_current_user)):
         "image_base64": image_b64,
         "tags": tags.model_dump(),
         "fidelity_mode": body.fidelity_mode or current.get("fidelity_mode", "descriptive"),
+        "brand": body.brand or None,
         "favorite": False,
         "created_at": utcnow(),
     }
     if doc["fidelity_mode"] == "identified":
         # MOCKED identified mode (Ximilar/Google Lens not integrated yet)
-        doc["brand"] = None
+        doc.setdefault("brand", None)
         doc["product_name"] = None
         doc["product_url"] = None
     await db.items.insert_one(doc)
+    await award_points(current["user_id"], 10, "item_added")
     return {"item": item_doc_to_out(doc).model_dump()}
 
 
@@ -885,6 +971,7 @@ async def save_outfit(body: SaveOutfitIn, current=Depends(get_current_user)):
         "created_at": utcnow(),
     }
     await db.outfits.insert_one(doc)
+    await award_points(current["user_id"], 20, "outfit_saved")
     return {"outfit": OutfitOut(**doc).model_dump()}
 
 
@@ -1023,6 +1110,232 @@ async def recreate_lookbook(lookbook_id: str, current=Depends(get_current_user))
     except Exception as e:
         logger.error(f"recreate_lookbook error: {e}")
         return {"message": "Couldn't recreate this look right now — please try again.", "outfit": None}
+
+
+# ---------------------- Categories ----------------------
+DEFAULT_CATEGORIES = ["tops", "bottoms", "dresses", "outerwear", "shoes", "accessories"]
+
+
+@api.get("/users/me/categories")
+async def get_categories(current=Depends(get_current_user)):
+    custom = current.get("custom_categories") or []
+    all_cats = DEFAULT_CATEGORIES + [c for c in custom if c not in DEFAULT_CATEGORIES]
+    return {"categories": all_cats, "default": DEFAULT_CATEGORIES, "custom": custom}
+
+
+@api.post("/users/me/categories")
+async def add_category(body: AddCategoryIn, current=Depends(get_current_user)):
+    name = body.name.strip().lower()
+    if not name:
+        raise HTTPException(status_code=400, detail="Category name required")
+    if name in DEFAULT_CATEGORIES:
+        raise HTTPException(status_code=400, detail="That's already a default category")
+    custom = current.get("custom_categories") or []
+    if name in custom:
+        raise HTTPException(status_code=400, detail="Category already exists")
+    if len(custom) >= 20:
+        raise HTTPException(status_code=400, detail="Maximum 20 custom categories")
+    await db.users.update_one(
+        {"user_id": current["user_id"]},
+        {"$push": {"custom_categories": name}},
+    )
+    return {"categories": DEFAULT_CATEGORIES + custom + [name]}
+
+
+@api.delete("/users/me/categories/{name}")
+async def delete_category(name: str, current=Depends(get_current_user)):
+    cat = name.strip().lower()
+    if cat in DEFAULT_CATEGORIES:
+        raise HTTPException(status_code=400, detail="Cannot delete default categories")
+    await db.users.update_one(
+        {"user_id": current["user_id"]},
+        {"$pull": {"custom_categories": cat}},
+    )
+    custom = (current.get("custom_categories") or [])
+    custom = [c for c in custom if c != cat]
+    return {"categories": DEFAULT_CATEGORIES + custom}
+
+
+# ---------------------- Points ----------------------
+@api.get("/users/me/points")
+async def get_points(current=Depends(get_current_user)):
+    pts = current.get("points", 0)
+    return {"points": pts, "level": points_level(pts)}
+
+
+# ---------------------- Listings (Donate/Swap) ----------------------
+@api.patch("/items/{item_id}/listing")
+async def update_listing(item_id: str, body: ListingUpdateIn, current=Depends(get_current_user)):
+    """Set listing_status to 'donate', 'swap', or null to remove."""
+    status = body.status
+    if status not in (None, "donate", "swap"):
+        raise HTTPException(status_code=400, detail="status must be 'donate', 'swap', or null")
+    res = await db.items.update_one(
+        {"item_id": item_id, "user_id": current["user_id"]},
+        {"$set": {"listing_status": status}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Item not found")
+    d = await db.items.find_one({"item_id": item_id, "user_id": current["user_id"]}, {"_id": 0})
+    return {"item": item_doc_to_out(d).model_dump()}
+
+
+@api.get("/items/listings/mine")
+async def my_listings(current=Depends(get_current_user)):
+    cursor = db.items.find(
+        {"user_id": current["user_id"], "listing_status": {"$in": ["donate", "swap"]}},
+        {"_id": 0},
+    ).sort("created_at", -1)
+    docs = await cursor.to_list(200)
+    return {"items": [item_doc_to_out(d).model_dump() for d in docs]}
+
+
+@api.get("/items/listings/community")
+async def community_listings(current=Depends(get_current_user)):
+    """Browse all listings from other users (no images for privacy — just metadata)."""
+    cursor = db.items.find(
+        {"listing_status": {"$in": ["donate", "swap"]}, "user_id": {"$ne": current["user_id"]}},
+        {"_id": 0, "image_base64": 0},
+    ).sort("created_at", -1).limit(100)
+    docs = await cursor.to_list(100)
+    # Attach owner first name
+    result = []
+    for d in docs:
+        owner = await db.users.find_one({"user_id": d.get("user_id")}, {"name": 1})
+        owner_name = (owner.get("name") or "").split()[0] if owner else "Someone"
+        entry = item_doc_to_out(d).model_dump()
+        entry["image_base64"] = ""  # strip image for community view
+        entry["owner_name"] = owner_name
+        result.append(entry)
+    return {"items": result}
+
+
+# ---------------------- Store Suggestions ----------------------
+@api.get("/users/me/suggestions")
+async def get_suggestions(current=Depends(get_current_user)):
+    """AI-generated wardrobe gap analysis with store links. Cached for 24h."""
+    # Check cache
+    cached = current.get("wardrobe_suggestions")
+    cached_at = current.get("wardrobe_suggestions_at")
+    if cached and cached_at:
+        if isinstance(cached_at, datetime):
+            if cached_at.tzinfo is None:
+                cached_at = cached_at.replace(tzinfo=timezone.utc)
+            if (utcnow() - cached_at).total_seconds() < 86400:
+                return {"suggestions": cached, "cached": True}
+
+    if not EMERGENT_LLM_KEY:
+        # Return static placeholder suggestions
+        return {
+            "suggestions": [
+                {
+                    "gap_title": "Versatile White Button-Down",
+                    "description": "A classic white shirt anchors both casual and formal looks.",
+                    "search_term": "white button-down shirt",
+                    "store": "Uniqlo",
+                    "store_search_url": "https://www.uniqlo.com/us/en/search?q=white+button-down+shirt",
+                },
+                {
+                    "gap_title": "Well-Fitted Dark Jeans",
+                    "description": "Dark denim transitions from day to night seamlessly.",
+                    "search_term": "slim dark jeans",
+                    "store": "ASOS",
+                    "store_search_url": "https://www.asos.com/search/?q=slim+dark+jeans",
+                },
+                {
+                    "gap_title": "Neutral Blazer",
+                    "description": "Elevates any outfit instantly — wear over a t-shirt or dress.",
+                    "search_term": "neutral blazer",
+                    "store": "Zara",
+                    "store_search_url": "https://www.zara.com/us/en/search?searchTerm=neutral+blazer",
+                },
+            ],
+            "cached": False,
+        }
+
+    # Fetch user's items for context
+    cursor = db.items.find({"user_id": current["user_id"]}, {"_id": 0, "image_base64": 0})
+    items = await cursor.to_list(200)
+
+    if not items:
+        suggestions = [
+            {
+                "gap_title": "Start with basics",
+                "description": "Add your first items so I can suggest wardrobe gaps.",
+                "search_term": "wardrobe essentials",
+                "store": "H&M",
+                "store_search_url": "https://www2.hm.com/en_us/search-results.html?q=wardrobe+essentials",
+            }
+        ]
+        return {"suggestions": suggestions, "cached": False}
+
+    catalog_summary = []
+    for it in items[:50]:
+        t = it.get("tags") or {}
+        catalog_summary.append(
+            f"- {t.get('description') or it.get('name','item')} "
+            f"({t.get('category','')} / {t.get('color','')} / {t.get('formality','')})"
+        )
+
+    stores = {
+        "H&M": "https://www2.hm.com/en_us/search-results.html?q={q}",
+        "Zara": "https://www.zara.com/us/en/search?searchTerm={q}",
+        "ASOS": "https://www.asos.com/search/?q={q}",
+        "Nordstrom": "https://www.nordstrom.com/sr?origin=keywordsearch&keyword={q}",
+        "Uniqlo": "https://www.uniqlo.com/us/en/search?q={q}",
+    }
+
+    sys_msg = (
+        "You are a personal stylist. Analyze the user's wardrobe and identify gaps. "
+        "Return strict JSON ONLY: {\"suggestions\": ["
+        "{\"gap_title\": string, \"description\": string (1 sentence), "
+        "\"search_term\": string (2-4 words for searching), "
+        "\"store\": one of [\"H&M\",\"Zara\",\"ASOS\",\"Nordstrom\",\"Uniqlo\"]}]} "
+        "Return 4-5 suggestions. No prose, no markdown."
+    )
+    prompt = (
+        f"User's current wardrobe ({len(items)} items):\n"
+        + "\n".join(catalog_summary)
+        + "\n\nIdentify 4-5 missing wardrobe essentials or style gaps. Return JSON only."
+    )
+
+    try:
+        ai_client = AsyncOpenAI(api_key=EMERGENT_LLM_KEY)
+        response = await ai_client.chat.completions.create(
+            model=AI_MODEL_NAME,
+            messages=[
+                {"role": "system", "content": sys_msg},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=800,
+        )
+        resp = response.choices[0].message.content
+        data = _safe_json_loads(resp if isinstance(resp, str) else str(resp))
+        raw_suggestions = (data or {}).get("suggestions") or []
+
+        # Build full store search URLs
+        final = []
+        for s in raw_suggestions[:5]:
+            store = s.get("store", "H&M")
+            q = (s.get("search_term") or "").replace(" ", "+")
+            url_template = stores.get(store, stores["H&M"])
+            final.append({
+                "gap_title": str(s.get("gap_title", ""))[:80],
+                "description": str(s.get("description", ""))[:200],
+                "search_term": s.get("search_term", ""),
+                "store": store,
+                "store_search_url": url_template.replace("{q}", q),
+            })
+
+        # Cache in user doc
+        await db.users.update_one(
+            {"user_id": current["user_id"]},
+            {"$set": {"wardrobe_suggestions": final, "wardrobe_suggestions_at": utcnow()}},
+        )
+        return {"suggestions": final, "cached": False}
+    except Exception as e:
+        logger.error(f"get_suggestions error: {e}")
+        raise HTTPException(status_code=500, detail="Could not generate suggestions")
 
 
 # ---------------------- Camera Roll Scan ----------------------
