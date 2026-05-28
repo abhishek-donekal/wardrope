@@ -642,7 +642,7 @@ async def auth_google_session(body: GoogleSessionIn):
     try:
         async with httpx.AsyncClient(timeout=15.0) as cli:
             r = await cli.get(
-                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                "https://backend.emergentagent.com/auth/v1/env/oauth/session-data",
                 headers={"X-Session-ID": body.session_token},
             )
             if r.status_code != 200:

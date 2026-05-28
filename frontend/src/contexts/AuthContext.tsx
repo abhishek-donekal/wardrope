@@ -41,6 +41,8 @@ type AuthState = {
   isDemoMode: boolean;
   enterDemoMode: () => void;
   exitDemoMode: () => Promise<void>;
+  googleAuthError: string | null;
+  clearGoogleAuthError: () => void;
 };
 
 const Ctx = createContext<AuthState | null>(null);
@@ -55,6 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUserState] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDemoMode, setIsDemoMode] = useState(false);
+  const [googleAuthError, setGoogleAuthError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -92,11 +95,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       await setToken(res.token);
       setUserState(res.user);
+      setGoogleAuthError(null);
       // Clean the URL so it's not re-processed
       window.history.replaceState(null, "", window.location.pathname);
       return true;
-    } catch (e) {
+    } catch (e: any) {
+      const msg = e?.message || "Google sign-in failed. Please try again.";
       console.warn("Google session exchange failed", e);
+      setGoogleAuthError(msg);
       window.history.replaceState(null, "", window.location.pathname);
       return false;
     }
@@ -205,9 +211,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await clearToken();
   };
 
+  const clearGoogleAuthError = () => setGoogleAuthError(null);
+
   return (
     <Ctx.Provider
-      value={{ user, loading, login, register, loginWithGoogle, logout, refresh, setUser: setUserState, isDemoMode, enterDemoMode, exitDemoMode }}
+      value={{ user, loading, login, register, loginWithGoogle, logout, refresh, setUser: setUserState, isDemoMode, enterDemoMode, exitDemoMode, googleAuthError, clearGoogleAuthError }}
     >
       {children}
     </Ctx.Provider>

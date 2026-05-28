@@ -21,13 +21,13 @@ import { useAuth } from "@/src/contexts/AuthContext";
 import { colors, type, space } from "@/src/theme";
 
 export default function Login() {
-  const { login, loginWithGoogle, enterDemoMode } = useAuth();
+  const { login, loginWithGoogle, enterDemoMode, googleAuthError, clearGoogleAuthError } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(googleAuthError);
 
   const submit = async () => {
     if (!email || !password) {
@@ -35,6 +35,7 @@ export default function Login() {
       return;
     }
     setErr(null);
+    clearGoogleAuthError();
     setBusy(true);
     try {
       await login(email.trim(), password);
