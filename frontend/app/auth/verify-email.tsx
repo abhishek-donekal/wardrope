@@ -148,6 +148,14 @@ export default function VerifyEmail() {
               </Text>
             )}
           </TouchableOpacity>
+
+          {/* Skip — shown when email service isn't set up yet */}
+          <TouchableOpacity
+            onPress={() => router.replace(user?.phone ? "/auth/verify-phone" : "/onboarding")}
+            style={styles.skipBtn}
+          >
+            <Text style={styles.skipText}>Skip for now</Text>
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -201,6 +209,8 @@ const styles = StyleSheet.create({
   primaryBtnText: { color: colors.textInverse, fontWeight: "700", letterSpacing: 1, fontSize: 14 },
   resendBtn: { marginTop: space.lg, padding: space.sm },
   resendText: { color: colors.accent, fontSize: 14 },
+  skipBtn: { marginTop: space.md, padding: space.sm },
+  skipText: { color: colors.textSecondary, fontSize: 13, textDecorationLine: "underline" },
   err: {
     color: "#FF7A7A",
     backgroundColor: "rgba(114,47,55,0.25)",

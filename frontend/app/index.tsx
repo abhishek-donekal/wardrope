@@ -13,7 +13,9 @@ export default function Index() {
     if (loading) return;
     if (!user) {
       router.replace("/auth/login");
-    } else if (user.auth_provider === "email" && !user.email_verified) {
+    } else if (user.auth_provider === "email" && !user.email_verified && !user.onboarding_complete) {
+      // Only gate unverified users who haven't completed onboarding yet
+      // (existing users who completed onboarding before this feature are let through)
       router.replace("/auth/verify-email");
     } else if (!user.onboarding_complete) {
       router.replace("/onboarding");
