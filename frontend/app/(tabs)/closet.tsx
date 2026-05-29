@@ -279,7 +279,7 @@ export default function Closet() {
           selectedClosetId
             ? `/add-item?closet_id=${encodeURIComponent(selectedClosetId)}`
             : "/add-item"
-        )} onScan={() => router.push("/scan/camera-roll")} />
+        )} onScan={() => router.push("/barcode-scan")} />
       ) : (
         <FlatList
           data={filtered}

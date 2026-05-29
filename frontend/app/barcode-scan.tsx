@@ -15,7 +15,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import { api } from "@/src/lib/api";
 import { colors, type, space } from "@/src/theme";
 
-type ScanResult = {
+type LookupResult = {
   found: boolean;
   name?: string;
   brand?: string;
@@ -23,12 +23,15 @@ type ScanResult = {
   image_url?: string;
 };
 
+type AddState = "idle" | "adding" | "done" | "error";
+
 export default function BarcodeScanner() {
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning] = useState(true);
   const [looking, setLooking] = useState(false);
-  const [result, setResult] = useState<ScanResult | null>(null);
+  const [result, setResult] = useState<LookupResult | null>(null);
+  const [addState, setAddState] = useState<AddState>("idle");
   const lastScanned = useRef<string>("");
 
   const handleBarcode = async ({ data }: { data: string }) => {
@@ -37,7 +40,7 @@ export default function BarcodeScanner() {
     setScanning(false);
     setLooking(true);
     try {
-      const res = await api<ScanResult>("/items/barcode-lookup", {
+      const res = await api<LookupResult>("/items/barcode-lookup", {
         method: "POST",
         body: { barcode: data },
       });
@@ -49,24 +52,37 @@ export default function BarcodeScanner() {
     }
   };
 
-  const useResult = () => {
+  const addToWardrobe = async () => {
     if (!result?.found) return;
+    setAddState("adding");
+    try {
+      await api("/items/barcode-add", {
+        method: "POST",
+        body: { barcode: lastScanned.current },
+      });
+      setAddState("done");
+    } catch {
+      setAddState("error");
+    }
+  };
+
+  const addManually = () => {
     router.replace({
       pathname: "/add-item",
       params: {
-        prefill_name: result.name || "",
-        prefill_brand: result.brand || "",
+        prefill_name: result?.name || "",
+        prefill_brand: result?.brand || "",
       },
     });
   };
 
   const scanAgain = () => {
     setResult(null);
+    setAddState("idle");
     lastScanned.current = "";
     setScanning(true);
   };
 
-  // Permission not yet determined
   if (!permission) {
     return (
       <View style={styles.center}>
@@ -75,7 +91,6 @@ export default function BarcodeScanner() {
     );
   }
 
-  // Permission denied
   if (!permission.granted) {
     return (
       <SafeAreaView style={styles.root} edges={["top", "left", "right"]}>
@@ -101,7 +116,6 @@ export default function BarcodeScanner() {
 
   return (
     <View style={styles.root}>
-      {/* Camera view — not shown on web (web doesn't support CameraView barcode scan) */}
       {Platform.OS !== "web" ? (
         <CameraView
           style={StyleSheet.absoluteFill}
@@ -133,11 +147,11 @@ export default function BarcodeScanner() {
       {!result && !looking && (
         <View style={styles.frameWrap} pointerEvents="none">
           <View style={styles.frame} />
-          <Text style={styles.hint}>Point at a product barcode</Text>
+          <Text style={styles.hint}>Point at a clothing barcode or tag</Text>
         </View>
       )}
 
-      {/* Loading while looking up */}
+      {/* Looking up */}
       {looking && (
         <View style={styles.resultSheet}>
           <ActivityIndicator color={colors.accent} size="large" />
@@ -145,34 +159,80 @@ export default function BarcodeScanner() {
         </View>
       )}
 
-      {/* Result overlay */}
+      {/* Result */}
       {result && !looking && (
         <View style={styles.resultSheet}>
-          {result.found ? (
+          {/* Adding in progress */}
+          {addState === "adding" && (
             <>
-              <Ionicons name="checkmark-circle" size={40} color={colors.accent} />
-              <Text style={[type.h3, { marginTop: space.md }]}>{result.name || "Product found"}</Text>
+              <ActivityIndicator color={colors.accent} size="large" />
+              <Text style={[type.bodySm, { marginTop: space.md }]}>AI is tagging your item…</Text>
+            </>
+          )}
+
+          {/* Successfully added */}
+          {addState === "done" && (
+            <>
+              <Ionicons name="checkmark-circle" size={44} color={colors.accent} />
+              <Text style={[type.h3, { marginTop: space.md }]}>Added to wardrobe!</Text>
+              <Text style={[type.bodySm, { marginTop: 6, color: colors.textSecondary, textAlign: "center" }]}>
+                {result.name}
+              </Text>
+              <TouchableOpacity style={[styles.primaryBtn, { marginTop: space.xl }]} onPress={() => router.replace("/(tabs)/closet")}>
+                <Text style={styles.primaryBtnText}>View Closet</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.secondaryBtn} onPress={scanAgain}>
+                <Text style={styles.secondaryBtnText}>Scan another</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {/* Add error */}
+          {addState === "error" && (
+            <>
+              <Ionicons name="alert-circle-outline" size={44} color={colors.textSecondary} />
+              <Text style={[type.h3, { marginTop: space.md }]}>Couldn't add item</Text>
+              <TouchableOpacity style={[styles.primaryBtn, { marginTop: space.xl }]} onPress={addManually}>
+                <Text style={styles.primaryBtnText}>Add manually instead</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.secondaryBtn} onPress={scanAgain}>
+                <Text style={styles.secondaryBtnText}>Try again</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {/* Found — ready to add */}
+          {addState === "idle" && result.found && (
+            <>
+              <Ionicons name="barcode-outline" size={36} color={colors.accent} />
+              <Text style={[type.h3, { marginTop: space.md, textAlign: "center" }]}>{result.name || "Product found"}</Text>
               {result.brand ? (
                 <Text style={[type.bodySm, { color: colors.accent, marginTop: 4 }]}>{result.brand}</Text>
               ) : null}
               {result.description && result.description !== result.name ? (
-                <Text style={[type.bodySm, { marginTop: 8, textAlign: "center", maxWidth: 280 }]} numberOfLines={2}>
+                <Text style={[type.bodySm, { marginTop: 6, textAlign: "center", color: colors.textSecondary, maxWidth: 280 }]} numberOfLines={2}>
                   {result.description}
                 </Text>
               ) : null}
-              <TouchableOpacity style={[styles.primaryBtn, { marginTop: space.xl }]} onPress={useResult}>
-                <Text style={styles.primaryBtnText}>Use this product</Text>
+              <TouchableOpacity style={[styles.primaryBtn, { marginTop: space.xl }]} onPress={addToWardrobe}>
+                <Text style={styles.primaryBtnText}>Add to Wardrobe</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.secondaryBtn} onPress={addManually}>
+                <Text style={styles.secondaryBtnText}>Edit details first</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.secondaryBtn} onPress={scanAgain}>
                 <Text style={styles.secondaryBtnText}>Scan again</Text>
               </TouchableOpacity>
             </>
-          ) : (
+          )}
+
+          {/* Not found */}
+          {addState === "idle" && !result.found && (
             <>
-              <Ionicons name="help-circle-outline" size={40} color={colors.textSecondary} />
+              <Ionicons name="help-circle-outline" size={44} color={colors.textSecondary} />
               <Text style={[type.h3, { marginTop: space.md }]}>Product not found</Text>
               <Text style={[type.bodySm, { marginTop: 8, textAlign: "center", maxWidth: 280 }]}>
-                This barcode is not in our database. You can still add the item manually.
+                This barcode isn't in our database. Add the item manually instead.
               </Text>
               <TouchableOpacity style={[styles.primaryBtn, { marginTop: space.xl }]} onPress={() => router.replace("/add-item")}>
                 <Text style={styles.primaryBtnText}>Add manually</Text>
@@ -200,55 +260,34 @@ const styles = StyleSheet.create({
     paddingVertical: space.md,
   },
   iconBtn: {
-    width: 40,
-    height: 40,
+    width: 40, height: 40,
     backgroundColor: "rgba(0,0,0,0.5)",
     borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: "center", justifyContent: "center",
   },
   overlayTitle: { color: "#fff", fontSize: 13, letterSpacing: 2, textTransform: "uppercase", fontWeight: "600" },
   frameWrap: {
     position: "absolute",
     top: 0, left: 0, right: 0, bottom: 0,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: "center", justifyContent: "center",
   },
-  frame: {
-    width: 260,
-    height: 160,
-    borderWidth: 2,
-    borderColor: colors.accent,
-    borderRadius: 4,
-  },
-  hint: {
-    color: "rgba(255,255,255,0.7)",
-    fontSize: 13,
-    marginTop: 16,
-    letterSpacing: 0.5,
-  },
+  frame: { width: 260, height: 160, borderWidth: 2, borderColor: colors.accent, borderRadius: 4 },
+  hint: { color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 16, letterSpacing: 0.5 },
   resultSheet: {
     position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
+    bottom: 0, left: 0, right: 0,
     backgroundColor: colors.bg,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 20, borderTopRightRadius: 20,
     paddingHorizontal: space.lg,
     paddingTop: space.xl,
     paddingBottom: 60,
     alignItems: "center",
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopWidth: 1, borderTopColor: colors.border,
   },
   primaryBtn: {
     backgroundColor: colors.accent,
-    paddingVertical: 14,
-    paddingHorizontal: 40,
-    borderRadius: 2,
-    alignItems: "center",
-    width: "100%",
+    paddingVertical: 14, paddingHorizontal: 40,
+    borderRadius: 2, alignItems: "center", width: "100%",
   },
   primaryBtnText: { color: colors.textInverse, fontWeight: "700", letterSpacing: 1, fontSize: 14 },
   secondaryBtn: { marginTop: space.md, paddingVertical: 10 },

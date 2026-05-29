@@ -1168,6 +1168,97 @@ async def barcode_lookup(body: BarcodeIn, current=Depends(get_current_user)):
         return {"found": False}
 
 
+@api.post("/items/barcode-add")
+async def barcode_add(body: BarcodeIn, current=Depends(get_current_user)):
+    """Look up barcode, AI-tag the garment, and create it in the user's default closet."""
+    barcode = body.barcode.strip()
+    if not barcode:
+        raise HTTPException(status_code=400, detail="barcode required")
+
+    # 1. Look up product
+    product = {"found": False}
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as cli:
+            r = await cli.get(
+                "https://api.upcitemdb.com/prod/trial/lookup",
+                params={"upc": barcode},
+                headers={"Accept": "application/json"},
+            )
+        if r.status_code == 200:
+            items_list = r.json().get("items") or []
+            if items_list:
+                first = items_list[0]
+                images = first.get("images") or []
+                product = {
+                    "found": True,
+                    "name": first.get("title") or first.get("description") or "",
+                    "brand": first.get("brand") or "",
+                    "description": first.get("description") or "",
+                    "image_url": images[0] if images else None,
+                }
+    except Exception as e:
+        logger.error(f"barcode_add lookup error: {e}")
+
+    if not product["found"]:
+        return {"added": False, "reason": "Product not found in database"}
+
+    # 2. AI-tag the garment
+    tags = None
+    image_url = product.get("image_url")
+    if image_url:
+        raw = await _claude_vision_url(_TAG_SYS_PROMPT, image_url, _TAG_SCHEMA_HINT, max_tokens=600)
+        tags = _parse_tag_data(_safe_json_loads(raw) if raw else None)
+    else:
+        # Tag from text description when no image
+        text_prompt = (
+            f"Product: {product['name']}\nBrand: {product['brand']}\n"
+            f"Description: {product['description']}\n\n"
+            "Extract clothing tags as JSON matching the schema. "
+            "If this is not a clothing item, set type to 'other'.\n"
+            f"{_TAG_SCHEMA_HINT}"
+        )
+        try:
+            cli = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+            msg = await cli.messages.create(
+                model=AI_FAST_MODEL,
+                max_tokens=400,
+                messages=[{"role": "user", "content": text_prompt}],
+            )
+            raw = msg.content[0].text if msg.content else None
+            tags = _parse_tag_data(_safe_json_loads(raw) if raw else None)
+        except Exception as e:
+            logger.error(f"barcode_add AI tag error: {e}")
+
+    if tags is None:
+        tags = ItemTags()
+
+    # 3. Resolve default closet
+    user_id = current["user_id"]
+    closet = await db.closets.find_one({"user_id": user_id, "is_default": True})
+    closet_id = closet["closet_id"] if closet else None
+
+    # 4. Create item
+    item_id = new_id("item")
+    now = utcnow()
+    doc = {
+        "item_id": item_id,
+        "user_id": user_id,
+        "closet_id": closet_id,
+        "image_url": image_url,
+        "image_base64": None,
+        "name": product["name"],
+        "brand": product["brand"],
+        "tags": tags.model_dump(),
+        "times_worn": 0,
+        "last_worn_at": None,
+        "price": None,
+        "purchased_at": None,
+        "created_at": now,
+    }
+    await db.items.insert_one(doc)
+    return {"added": True, "item": item_doc_to_out(doc).model_dump()}
+
+
 @api.post("/items")
 async def create_item(body: CreateItemIn, current=Depends(get_current_user)):
     if not body.image_base64 and not body.image_url:

@@ -145,11 +145,11 @@ export default function Profile() {
             testID="profile-row-add-item"
           />
           <Row
-            icon="images-outline"
-            label="Scan camera roll"
-            sub="Find outfits in your photos"
-            onPress={() => router.push("/scan/camera-roll")}
-            testID="profile-row-camera-roll"
+            icon="barcode-outline"
+            label="Scan barcode"
+            sub="Auto-add clothing from its tag"
+            onPress={() => router.push("/barcode-scan")}
+            testID="profile-row-barcode-scan"
           />
           <Row
             icon="swap-horizontal-outline"
