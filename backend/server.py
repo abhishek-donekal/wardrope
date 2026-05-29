@@ -149,6 +149,9 @@ class GoogleSessionIn(BaseModel):
     session_token: str  # token returned from Emergent google auth
 
 
+DEFAULT_PERSONA = "editor"
+
+
 class UserOut(BaseModel):
     user_id: str
     email: str
@@ -858,8 +861,6 @@ FASHION_PERSONAS: Dict[str, Dict[str, str]] = {
         ),
     },
 }
-
-DEFAULT_PERSONA = "editor"
 
 
 async def _claude_text(system: str, user: str, model: str = None, max_tokens: int = 2000) -> str:
