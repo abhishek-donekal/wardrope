@@ -11,11 +11,8 @@ import uuid
 import bcrypt
 import jwt
 import httpx
-import smtplib
 import random
 import asyncio
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
@@ -36,19 +33,14 @@ JWT_EXPIRES_DAYS = int(os.environ.get("JWT_EXPIRES_DAYS", "30"))
 AI_FAST_MODEL = "claude-3-5-haiku-20241022"   # vision + fast tagging
 AI_SMART_MODEL = "claude-3-5-sonnet-20241022"  # stylist, suggestions, lookbook
 
-# Email (SMTP) config
-SMTP_HOST = os.environ.get("SMTP_HOST", "")
-SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
-SMTP_USER = os.environ.get("SMTP_USER", "")
-SMTP_PASS = os.environ.get("SMTP_PASS", "")
+# Email — AWS SES config
 EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "Wardrope")
-EMAIL_FROM = os.environ.get("EMAIL_FROM", SMTP_USER)
+SES_FROM_EMAIL = os.environ.get("SES_FROM_EMAIL", "")
+SES_REGION = os.environ.get("AWS_SES_REGION", os.environ.get("S3_REGION", "us-east-1"))
 APP_URL = os.environ.get("APP_URL", "https://wardrope-red.vercel.app")
 
-# Twilio SMS config (optional)
-TWILIO_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
-TWILIO_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
-TWILIO_FROM = os.environ.get("TWILIO_PHONE_NUMBER", "")
+# SMS — AWS SNS config
+SNS_REGION = os.environ.get("AWS_SNS_REGION", os.environ.get("S3_REGION", "us-east-1"))
 
 # Stripe billing config
 STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
@@ -361,46 +353,47 @@ def _email_html(content: str) -> str:
 
 
 async def send_email(to: str, subject: str, html_content: str) -> None:
-    if not SMTP_HOST or not SMTP_USER or not SMTP_PASS:
-        logger.warning("SMTP not configured — email skipped")
+    if not SES_FROM_EMAIL or not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:
+        logger.warning("AWS SES not configured — email skipped")
         return
+    import aioboto3
     html = _email_html(html_content)
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = f"{EMAIL_FROM_NAME} <{EMAIL_FROM}>"
-    msg["To"] = to
-    msg.attach(MIMEText(html, "html"))
-
-    def _send():
-        try:
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as s:
-                s.ehlo()
-                s.starttls()
-                s.login(SMTP_USER, SMTP_PASS)
-                s.sendmail(EMAIL_FROM, to, msg.as_string())
-            logger.info(f"Email sent to {to}: {subject}")
-        except Exception as e:
-            logger.error(f"SMTP send failed: {e}")
-
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, _send)
+    session = aioboto3.Session(
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        region_name=SES_REGION,
+    )
+    try:
+        async with session.client("ses") as ses:
+            await ses.send_email(
+                Source=f"{EMAIL_FROM_NAME} <{SES_FROM_EMAIL}>",
+                Destination={"ToAddresses": [to]},
+                Message={
+                    "Subject": {"Data": subject, "Charset": "UTF-8"},
+                    "Body": {"Html": {"Data": html, "Charset": "UTF-8"}},
+                },
+            )
+        logger.info(f"SES email sent to {to}: {subject}")
+    except Exception as e:
+        logger.error(f"SES send failed: {e}")
 
 
 async def send_sms(to: str, body: str) -> None:
-    if not TWILIO_SID or not TWILIO_TOKEN or not TWILIO_FROM:
-        logger.warning("Twilio not configured — SMS skipped")
+    if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:
+        logger.warning("AWS SNS not configured — SMS skipped")
         return
+    import aioboto3
+    session = aioboto3.Session(
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        region_name=SNS_REGION,
+    )
     try:
-        async with httpx.AsyncClient(timeout=10.0) as cli:
-            r = await cli.post(
-                f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_SID}/Messages.json",
-                auth=(TWILIO_SID, TWILIO_TOKEN),
-                data={"From": TWILIO_FROM, "To": to, "Body": body},
-            )
-            if r.status_code not in (200, 201):
-                logger.error(f"Twilio SMS failed ({r.status_code}): {r.text}")
+        async with session.client("sns") as sns:
+            await sns.publish(PhoneNumber=to, Message=body)
+        logger.info(f"SNS SMS sent to {to}")
     except Exception as e:
-        logger.error(f"SMS send error: {e}")
+        logger.error(f"SNS SMS failed: {e}")
 
 
 async def create_verification_code(target: str, code_type: str) -> str:
