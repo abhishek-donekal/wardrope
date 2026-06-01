@@ -81,8 +81,6 @@ export default function VerifyPhone() {
     }
   };
 
-  const skip = () => router.replace("/onboarding");
-
   return (
     <SafeAreaView style={styles.root} edges={["top", "left", "right"]}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
@@ -179,9 +177,6 @@ export default function VerifyPhone() {
             </>
           )}
 
-          <TouchableOpacity onPress={skip} style={styles.skipBtn}>
-            <Text style={styles.skipText}>Skip for now</Text>
-          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -240,8 +235,6 @@ const styles = StyleSheet.create({
   primaryBtnText: { color: colors.textInverse, fontWeight: "700", letterSpacing: 1, fontSize: 14 },
   secondaryBtn: { marginTop: space.md, padding: space.sm },
   secondaryText: { color: colors.textSecondary, fontSize: 14 },
-  skipBtn: { marginTop: space.xl, padding: space.sm },
-  skipText: { color: colors.textSecondary, fontSize: 13, textDecorationLine: "underline" },
   err: {
     color: "#FF7A7A",
     backgroundColor: "rgba(114,47,55,0.25)",
