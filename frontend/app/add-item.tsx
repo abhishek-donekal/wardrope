@@ -37,6 +37,7 @@ export default function AddItem() {
   const params = useLocalSearchParams<{ prefill_name?: string; prefill_brand?: string; closet_id?: string }>();
   const [pickedUri, setPickedUri] = useState<string | null>(null);
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
+  const [base64Fallback, setBase64Fallback] = useState<string | null>(null);
   const [tags, setTags] = useState<Tags | null>(null);
   const [name, setName] = useState(params.prefill_name || "");
   const [brand, setBrand] = useState(params.prefill_brand || "");
@@ -80,33 +81,61 @@ export default function AddItem() {
     return req.granted;
   };
 
-  const handleResult = async (uri?: string | null) => {
+  const handleResult = async (uri?: string | null, pickerBase64?: string | null) => {
     if (!uri) {
       setBusy("idle");
       return;
     }
     setPickedUri(uri);
     setBusy("uploading");
-    let uploadedUrl: string;
+
+    let uploadedUrl: string | null = null;
+    let b64: string | null = pickerBase64 || null;
+
+    // On web the image picker may not return base64 — read it from the blob URI
+    if (!b64 && typeof window !== "undefined") {
+      try {
+        const resp = await fetch(uri);
+        const blob = await resp.blob();
+        b64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.includes(",") ? result.split(",")[1] : result);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } catch {}
+    }
+
     try {
       uploadedUrl = await uploadImageToS3(uri, "item.jpg");
       setPublicUrl(uploadedUrl);
-    } catch (e: any) {
-      Alert.alert("Upload failed", e?.message || "Could not upload image");
-      setBusy("idle");
-      return;
+    } catch {
+      if (b64) {
+        setBase64Fallback(b64);
+      } else {
+        Alert.alert("Upload failed", "Could not process this image. Please try a different photo.");
+        setBusy("idle");
+        return;
+      }
     }
+
     setBusy("tagging");
     try {
+      const tagBody = uploadedUrl
+        ? { image_url: uploadedUrl }
+        : { image_base64: b64 };
       const res = await api<{ tags: Tags }>("/ai/tag-item", {
         method: "POST",
-        body: { image_url: uploadedUrl },
+        body: tagBody,
       });
-      setTags(res.tags);
-      // Only set name from AI if not pre-filled (e.g. from barcode scan)
-      setName((prev) => prev || res.tags.description || res.tags.type || "");
-    } catch (e: any) {
-      Alert.alert("AI tagging failed", e?.message || "Unknown error");
+      setTags(res.tags || {});
+      setName((prev) => prev || res.tags?.description || res.tags?.type || "");
+    } catch {
+      // AI tagging failed — still show the form so user can fill in manually
+      setTags({});
     } finally {
       setBusy("idle");
     }
@@ -119,9 +148,11 @@ export default function AddItem() {
       const r = await ImagePicker.launchCameraAsync({
         quality: 0.7,
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        base64: true,
       });
       if (r.canceled) return setBusy("idle");
-      await handleResult(r.assets?.[0]?.uri);
+      const asset = r.assets?.[0];
+      await handleResult(asset?.uri, asset?.base64 ?? null);
     } catch {
       setBusy("idle");
     }
@@ -134,23 +165,28 @@ export default function AddItem() {
       const r = await ImagePicker.launchImageLibraryAsync({
         quality: 0.7,
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        base64: true,
       });
       if (r.canceled) return setBusy("idle");
-      await handleResult(r.assets?.[0]?.uri);
+      const asset = r.assets?.[0];
+      await handleResult(asset?.uri, asset?.base64 ?? null);
     } catch {
       setBusy("idle");
     }
   };
 
   const save = async () => {
-    if (!publicUrl || !tags) return;
+    if (!publicUrl && !base64Fallback) return;
     setBusy("saving");
     try {
       const parsedPrice = priceInput.trim() ? parseFloat(priceInput) : undefined;
+      const imageField = publicUrl
+        ? { image_url: publicUrl }
+        : { image_base64: base64Fallback };
       await api("/items", {
         method: "POST",
         body: {
-          image_url: publicUrl,
+          ...imageField,
           name: name || tags.description,
           tags,
           ...(brand.trim() ? { brand: brand.trim() } : {}),
@@ -306,6 +342,7 @@ export default function AddItem() {
                   onPress={() => {
                     setPickedUri(null);
                     setPublicUrl(null);
+                    setBase64Fallback(null);
                     setTags(null);
                   }}
                 >
