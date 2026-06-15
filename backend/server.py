@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends, Request, Query
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -19,8 +19,25 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 
 from anthropic import AsyncAnthropic
-import stripe
 import math
+import time
+from collections import defaultdict
+
+# ---------------------- In-memory rate limiter ----------------------
+# Keyed by (user_id, endpoint). Stores list of timestamps.
+# Limits: stylist = 10/hour, tag = 30/hour, suggestions = 5/hour
+_rate_store: Dict[str, list] = defaultdict(list)
+
+def _check_rate(user_id: str, endpoint: str, max_calls: int, window_seconds: int = 3600) -> bool:
+    """Returns True if allowed, False if rate limited."""
+    key = f"{user_id}:{endpoint}"
+    now = time.time()
+    calls = [t for t in _rate_store[key] if now - t < window_seconds]
+    if len(calls) >= max_calls:
+        return False
+    calls.append(now)
+    _rate_store[key] = calls
+    return True
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -33,41 +50,22 @@ JWT_EXPIRES_DAYS = int(os.environ.get("JWT_EXPIRES_DAYS", "30"))
 AI_FAST_MODEL = "claude-3-5-haiku-20241022"   # vision + fast tagging
 AI_SMART_MODEL = "claude-3-5-sonnet-20241022"  # stylist, suggestions, lookbook
 
-# Email — AWS SES config
-EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "Wardrope")
-SES_FROM_EMAIL = os.environ.get("SES_FROM_EMAIL", "")
-SES_REGION = os.environ.get("AWS_SES_REGION", os.environ.get("S3_REGION", "us-east-1"))
+# App URL
 APP_URL = os.environ.get("APP_URL", "https://wardrope-red.vercel.app")
 
-# SMS — AWS SNS config
-SNS_REGION = os.environ.get("AWS_SNS_REGION", os.environ.get("S3_REGION", "us-east-1"))
-
-# Stripe billing config
-STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
-STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
-if STRIPE_SECRET_KEY:
-    stripe.api_key = STRIPE_SECRET_KEY
+# Twilio Verify (email + SMS OTP)
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
+TWILIO_VERIFY_SID = os.environ.get("TWILIO_VERIFY_SID", "")
 
 # AWS S3 config
 AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID", "")
 AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
 S3_BUCKET = os.environ.get("S3_BUCKET", "")
 S3_REGION = os.environ.get("S3_REGION", "us-east-1")
+GOOGLE_PLACES_API_KEY = os.environ.get("GOOGLE_PLACES_API_KEY", "")
 
-# Stripe price IDs — set these after creating prices in Stripe dashboard
-# Keys: "{plan}_{period}", e.g. "single_monthly", "single_annual"
-STRIPE_PRICES: Dict[str, str] = {
-    "single_monthly":   os.environ.get("STRIPE_PRICE_SINGLE_MONTHLY", ""),
-    "single_annual":    os.environ.get("STRIPE_PRICE_SINGLE_ANNUAL", ""),
-    "couples_monthly":  os.environ.get("STRIPE_PRICE_COUPLES_MONTHLY", ""),
-    "couples_annual":   os.environ.get("STRIPE_PRICE_COUPLES_ANNUAL", ""),
-    "family_monthly":   os.environ.get("STRIPE_PRICE_FAMILY_MONTHLY", ""),
-    "family_annual":    os.environ.get("STRIPE_PRICE_FAMILY_ANNUAL", ""),
-    "addon_share":      os.environ.get("STRIPE_PRICE_ADDON_SHARE", ""),
-    "addon_stylist":    os.environ.get("STRIPE_PRICE_ADDON_STYLIST", ""),
-}
-
-# Fallback plan amounts for display when Stripe not configured (cents)
+# Plan amounts in cents
 PLAN_AMOUNTS_CENTS: Dict[str, int] = {
     "single_monthly": 199, "single_annual": 1791,
     "couples_monthly": 299, "couples_annual": 2691,
@@ -75,14 +73,101 @@ PLAN_AMOUNTS_CENTS: Dict[str, int] = {
     "addon_share": 999, "addon_stylist": 399,
 }
 
-client = AsyncIOMotorClient(MONGO_URL, tlsCAFile=certifi.where()) if MONGO_URL else None
+# Square billing config
+SQUARE_ACCESS_TOKEN = os.environ.get("SQUARE_ACCESS_TOKEN", "")
+SQUARE_ENVIRONMENT = os.environ.get("SQUARE_ENVIRONMENT", "sandbox")
+SQUARE_LOCATION_ID = os.environ.get("SQUARE_LOCATION_ID", "")
+SQUARE_WEBHOOK_SIGNATURE_KEY = os.environ.get("SQUARE_WEBHOOK_SIGNATURE_KEY", "")
+SQUARE_WEBHOOK_URL = os.environ.get("SQUARE_WEBHOOK_URL", "")
+
+PLAN_LABELS: Dict[str, str] = {
+    "single_monthly": "Single Closet - Monthly",
+    "single_annual": "Single Closet - Annual",
+    "couples_monthly": "Couples Closet - Monthly",
+    "couples_annual": "Couples Closet - Annual",
+    "family_monthly": "Family Closet - Monthly",
+    "family_annual": "Family Closet - Annual",
+    "addon_share": "Share Closet Add-on",
+    "addon_stylist": "Stylist AI Add-on",
+}
+
+ADDON_LABELS: Dict[str, str] = {
+    "share": "Share Closet Add-on",
+    "stylist": "Stylist AI Add-on",
+}
+
+# Compact codes for Square reference_id (max 40 chars)
+_PLAN_CODE = {"single": "si", "couples": "co", "family": "fa"}
+_PLAN_CODE_REV = {v: k for k, v in _PLAN_CODE.items()}
+_PERIOD_CODE = {"monthly": "m", "annual": "a"}
+_PERIOD_CODE_REV = {v: k for k, v in _PERIOD_CODE.items()}
+_ADDON_CODE = {"share": "sh", "stylist": "st"}
+_ADDON_CODE_REV = {v: k for k, v in _ADDON_CODE.items()}
+_PACK_CODE = {"points_starter": "ps", "points_popular": "pp", "points_best": "pb"}
+_PACK_CODE_REV = {v: k for k, v in _PACK_CODE.items()}
+
+
+def _sq_sub_ref(user_id: str, plan: str, period: str, addons: list) -> str:
+    uid = user_id.replace("user_", "")[:12]
+    ac = ".".join(_ADDON_CODE.get(a, a[:2]) for a in addons) if addons else ""
+    return f"{uid}|{_PLAN_CODE.get(plan,'?')}|{_PERIOD_CODE.get(period,'?')}|{ac}|s"
+
+
+def _sq_pts_ref(user_id: str, pack: str, points: int) -> str:
+    uid = user_id.replace("user_", "")[:12]
+    return f"{uid}|{_PACK_CODE.get(pack,'?')}|{points}|p"
+
+
+def _sq_decode_ref(ref_id: str) -> dict:
+    parts = ref_id.split("|")
+    if len(parts) < 4:
+        return {}
+    uid_hex = parts[0]
+    user_id = f"user_{uid_hex}"
+    ptype = parts[-1]
+    if ptype == "s":
+        plan = _PLAN_CODE_REV.get(parts[1], parts[1])
+        period = _PERIOD_CODE_REV.get(parts[2], parts[2])
+        addons = [_ADDON_CODE_REV.get(c, c) for c in parts[3].split(".") if c]
+        return {"type": "subscription", "user_id": user_id, "plan": plan, "period": period, "addons": addons}
+    elif ptype == "p":
+        pack = _PACK_CODE_REV.get(parts[1], parts[1])
+        points = int(parts[2]) if parts[2].isdigit() else 0
+        return {"type": "points_purchase", "user_id": user_id, "pack": pack, "points": points}
+    return {}
+
+client = AsyncIOMotorClient(
+    MONGO_URL,
+    tlsCAFile=certifi.where(),
+    serverSelectionTimeoutMS=5000,
+    connectTimeoutMS=5000,
+    socketTimeoutMS=10000,
+) if MONGO_URL else None
 db = client[DB_NAME] if client else None
 
-app = FastAPI(title="What's In My Wardrobe API")
+CORS_ORIGINS = [
+    o.strip()
+    for o in os.environ.get("CORS_ORIGINS", "https://wardrope-red.vercel.app,https://whatsinmywardrobe.com,https://web-axb9d4u4g-abhsiheks-projects-351d4109.vercel.app").split(",")
+    if o.strip()
+]
+
+app = FastAPI(title="What's In My Wardrobe API", docs_url="/api/docs", redoc_url="/api/redoc")
 api = APIRouter(prefix="/api")
 
 logger = logging.getLogger("wardrobe")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(f"Unhandled exception on {request.method} {request.url}: {type(exc).__name__}: {exc}")
+    return JSONResponse(status_code=500, content={"detail": f"Internal error: {type(exc).__name__}: {str(exc)}"})
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
 # ---------------------- Models ----------------------
@@ -141,7 +226,18 @@ class GoogleSessionIn(BaseModel):
     session_token: str  # token returned from Emergent google auth
 
 
+class ForgotPasswordIn(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordIn(BaseModel):
+    email: EmailStr
+    code: str
+    new_password: str
+
+
 DEFAULT_PERSONA = "editor"
+DEFAULT_THEME = "editorial"
 
 
 class UserOut(BaseModel):
@@ -161,6 +257,7 @@ class UserOut(BaseModel):
     phone_verified: bool = False
     points: int = 0
     stylist_persona: str = DEFAULT_PERSONA
+    theme_id: str = DEFAULT_THEME
     plan_type: str = "free"
     plan_period: str = "monthly"
     plan_addons: List[str] = []
@@ -177,6 +274,7 @@ class ProfileUpdate(BaseModel):
     onboarding_complete: Optional[bool] = None
     name: Optional[str] = None
     stylist_persona: Optional[str] = None
+    theme_id: Optional[str] = None
 
 
 class ItemTags(BaseModel):
@@ -205,6 +303,7 @@ class CreateItemIn(BaseModel):
     price: Optional[float] = None
     purchased_at: Optional[str] = None
     closet_id: Optional[str] = None
+    person_tag: Optional[str] = None
 
 
 class AddCategoryIn(BaseModel):
@@ -237,6 +336,7 @@ class UpdateItemIn(BaseModel):
     favorite: Optional[bool] = None
     price: Optional[float] = None
     purchased_at: Optional[str] = None
+    person_tag: Optional[str] = None
 
 
 class ItemOut(BaseModel):
@@ -319,6 +419,7 @@ class CameraRollScanIn(BaseModel):
 class CreateClosetIn(BaseModel):
     name: str
     description: Optional[str] = None
+    closet_type: str = "wardrobe"
 
 
 class UpdateClosetIn(BaseModel):
@@ -333,102 +434,62 @@ class ClosetOut(BaseModel):
     description: Optional[str] = None
     is_default: bool = False
     item_count: int = 0
+    closet_type: str = "wardrobe"
     created_at: datetime
 
 
-# ---------------------- Email & SMS helpers ----------------------
-def _email_html(content: str) -> str:
-    return f"""<!DOCTYPE html>
-<html>
-<body style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;background:#050505;margin:0;padding:0;">
-  <div style="max-width:480px;margin:40px auto;padding:40px 32px;background:#111111;border:1px solid #1e1e1e;">
-    <h1 style="color:#C5A059;font-size:26px;margin:0 0 4px;letter-spacing:1px;">WARDROPE</h1>
-    <p style="color:#666;font-size:11px;letter-spacing:3px;text-transform:uppercase;margin:0 0 32px;">Your digital wardrobe</p>
-    {content}
-    <hr style="border:none;border-top:1px solid #222;margin:32px 0;">
-    <p style="color:#444;font-size:11px;margin:0;">Wardrope &middot; <a href="{APP_URL}" style="color:#666;text-decoration:none;">{APP_URL}</a></p>
-  </div>
-</body>
-</html>"""
-
-
-async def send_email(to: str, subject: str, html_content: str) -> None:
-    if not SES_FROM_EMAIL or not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:
-        logger.warning("AWS SES not configured — email skipped")
-        return
-    import aioboto3
-    html = _email_html(html_content)
-    session = aioboto3.Session(
-        aws_access_key_id=AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-        region_name=SES_REGION,
-    )
+# ---------------------- Twilio Verify helpers ----------------------
+async def twilio_send_verification(to: str, channel: str) -> bool:
+    """Send OTP via Twilio Verify. channel: 'sms' | 'email'"""
+    if not TWILIO_ACCOUNT_SID or not TWILIO_VERIFY_SID:
+        logger.warning("Twilio Verify not configured — OTP skipped")
+        return False
     try:
-        async with session.client("ses") as ses:
-            await ses.send_email(
-                Source=f"{EMAIL_FROM_NAME} <{SES_FROM_EMAIL}>",
-                Destination={"ToAddresses": [to]},
-                Message={
-                    "Subject": {"Data": subject, "Charset": "UTF-8"},
-                    "Body": {"Html": {"Data": html, "Charset": "UTF-8"}},
-                },
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(
+                f"https://verify.twilio.com/v2/Services/{TWILIO_VERIFY_SID}/Verifications",
+                auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN),
+                data={"To": to, "Channel": channel},
             )
-        logger.info(f"SES email sent to {to}: {subject}")
+        if r.status_code == 201:
+            logger.info(f"Twilio Verify sent ({channel}) to {to}")
+            return True
+        logger.error(f"Twilio Verify send failed ({r.status_code}): {r.text}")
+        return False
     except Exception as e:
-        logger.error(f"SES send failed: {e}")
+        logger.error(f"Twilio Verify send error: {e}")
+        return False
 
 
-async def send_sms(to: str, body: str) -> None:
-    if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:
-        logger.warning("AWS SNS not configured — SMS skipped")
-        return
-    import aioboto3
-    session = aioboto3.Session(
-        aws_access_key_id=AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-        region_name=SNS_REGION,
-    )
+async def twilio_check_verification(to: str, code: str) -> bool:
+    """Check OTP via Twilio Verify. Returns True if approved."""
+    if not TWILIO_ACCOUNT_SID or not TWILIO_VERIFY_SID:
+        return False
     try:
-        async with session.client("sns") as sns:
-            await sns.publish(PhoneNumber=to, Message=body)
-        logger.info(f"SNS SMS sent to {to}")
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(
+                f"https://verify.twilio.com/v2/Services/{TWILIO_VERIFY_SID}/VerificationChecks",
+                auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN),
+                data={"To": to, "Code": code},
+            )
+        if r.status_code == 200:
+            return r.json().get("status") == "approved"
+        logger.error(f"Twilio Verify check failed ({r.status_code}): {r.text}")
+        return False
     except Exception as e:
-        logger.error(f"SNS SMS failed: {e}")
-
-
-async def create_verification_code(target: str, code_type: str) -> str:
-    """Generate and store a 6-digit verification code (10-min TTL)."""
-    code = str(random.randint(100000, 999999))
-    if db is not None:
-        await db.verification_codes.replace_one(
-            {"target": target, "type": code_type},
-            {
-                "target": target,
-                "type": code_type,
-                "code": code,
-                "created_at": utcnow(),
-                "expires_at": utcnow() + timedelta(minutes=10),
-            },
-            upsert=True,
-        )
-    return code
-
-
-async def check_verification_code(target: str, code_type: str, code: str) -> bool:
-    """Return True and consume the code if valid and not expired."""
-    if db is None:
+        logger.error(f"Twilio Verify check error: {e}")
         return False
-    doc = await db.verification_codes.find_one({"target": target, "type": code_type, "code": code})
-    if not doc:
-        return False
-    exp = doc.get("expires_at")
-    if isinstance(exp, datetime):
-        if exp.tzinfo is None:
-            exp = exp.replace(tzinfo=timezone.utc)
-        if exp < utcnow():
-            return False
-    await db.verification_codes.delete_one({"_id": doc["_id"]})
-    return True
+
+
+async def send_email_verification_code(email: str, name: str) -> None:
+    """Send email OTP via Twilio Verify."""
+    await twilio_send_verification(email, "email")
+
+
+async def send_welcome_email(email: str, name: str) -> None:
+    """Welcome email — send via Twilio Verify email channel (no-code welcome)."""
+    # Just log for now; welcome messaging handled in onboarding screen
+    logger.info(f"Welcome email skipped (no template channel) for {email}")
 
 
 async def award_points(user_id: str, amount: int, reason: str = "") -> int:
@@ -461,43 +522,6 @@ def points_level(pts: int) -> str:
     return "Bronze"
 
 
-async def send_welcome_email(email: str, name: str) -> None:
-    first = name.split()[0] if name else "there"
-    await send_email(
-        to=email,
-        subject="Welcome to Wardrope",
-        html_content=f"""
-<h2 style="color:#f0f0f0;font-size:22px;margin:0 0 16px;">Welcome, {first}.</h2>
-<p style="color:#aaa;font-size:15px;line-height:1.6;margin:0 0 24px;">
-  Your digital wardrobe is ready. Start cataloging your items, let the AI stylist build
-  looks from what you actually own, and explore editorial lookbooks for inspiration.
-</p>
-<a href="{APP_URL}" style="display:inline-block;background:#C5A059;color:#050505;text-decoration:none;
-  padding:14px 28px;font-weight:700;letter-spacing:1px;font-size:13px;">
-  OPEN MY WARDROBE
-</a>""",
-    )
-
-
-async def send_email_verification_code(email: str, name: str) -> None:
-    code = await create_verification_code(email, "email")
-    first = name.split()[0] if name else "there"
-    await send_email(
-        to=email,
-        subject="Verify your Wardrope email",
-        html_content=f"""
-<h2 style="color:#f0f0f0;font-size:22px;margin:0 0 16px;">Hi {first} — verify your email</h2>
-<p style="color:#aaa;font-size:15px;line-height:1.6;margin:0 0 24px;">
-  Enter this code in the app to confirm your email address.
-  It expires in <strong style="color:#f0f0f0;">10 minutes</strong>.
-</p>
-<div style="text-align:center;margin:32px 0;">
-  <span style="font-size:42px;font-weight:700;letter-spacing:12px;color:#C5A059;">{code}</span>
-</div>
-<p style="color:#555;font-size:12px;">If you didn't create a Wardrope account, you can safely ignore this email.</p>""",
-    )
-
-
 # ---------------------- Auth helpers ----------------------
 def hash_password(pw: str) -> str:
     return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
@@ -528,6 +552,8 @@ def decode_jwt(token: str) -> Optional[str]:
 
 
 async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Missing bearer token")
     token = authorization.split(" ", 1)[1].strip()
@@ -574,12 +600,33 @@ def user_to_out(u: Dict[str, Any]) -> UserOut:
         phone_verified=u.get("phone_verified", False),
         points=u.get("points", 0),
         stylist_persona=u.get("stylist_persona", DEFAULT_PERSONA),
+        theme_id=u.get("theme_id", DEFAULT_THEME),
         plan_type=u.get("plan_type", "free"),
         plan_period=u.get("plan_period", "monthly"),
         plan_addons=u.get("plan_addons", []) or [],
         subscription_status=u.get("subscription_status", "none"),
         created_at=u.get("created_at", utcnow()),
     )
+
+
+async def _check_login_reward(user_id: str) -> dict:
+    user = await db.users.find_one({"user_id": user_id}, {"last_login_reward_at": 1, "login_streak": 1, "_id": 0})
+    now = utcnow()
+    last = user.get("last_login_reward_at") if user else None
+    streak = (user.get("login_streak") or 0) if user else 0
+    if last:
+        if isinstance(last, datetime) and last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        hours = (now - last).total_seconds() / 3600
+        if hours < 24:
+            return {"rewarded": False, "streak": streak}
+        if hours > 48:
+            streak = 0
+    streak += 1
+    bonus = 100 if streak % 7 == 0 else 0
+    await db.users.update_one({"user_id": user_id}, {"$set": {"last_login_reward_at": now, "login_streak": streak}})
+    new_pts = await award_points(user_id, 10 + bonus, f"daily_login_s{streak}")
+    return {"rewarded": True, "points_awarded": 10 + bonus, "streak": streak, "streak_bonus": bonus > 0, "total_points": new_pts}
 
 
 # ---------------------- Auth Routes ----------------------
@@ -621,14 +668,21 @@ async def auth_register(body: RegisterIn):
 
 @api.post("/auth/login")
 async def auth_login(body: LoginIn):
-    email = body.email.lower().strip()
-    user = await db.users.find_one({"email": email}, {"_id": 0})
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        email = body.email.lower().strip()
+        user = await db.users.find_one({"email": email}, {"_id": 0})
+    except Exception as e:
+        logger.error(f"auth_login DB error: {e}")
+        raise HTTPException(status_code=503, detail=f"Database error: {str(e)}")
     if not user or not user.get("password_hash"):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = issue_jwt(user["user_id"])
-    return {"token": token, "user": user_to_out(user).model_dump()}
+    login_reward = await _check_login_reward(user["user_id"])
+    return {"token": token, "user": user_to_out(user).model_dump(), "login_reward": login_reward}
 
 
 @api.post("/auth/google/session")
@@ -689,7 +743,8 @@ async def auth_google_session(body: GoogleSessionIn):
         }},
         upsert=True,
     )
-    return {"token": session_token, "user": user_to_out(user).model_dump()}
+    login_reward = await _check_login_reward(user["user_id"])
+    return {"token": session_token, "user": user_to_out(user).model_dump(), "login_reward": login_reward}
 
 
 @api.get("/auth/me")
@@ -714,21 +769,51 @@ async def resend_email_code(current=Depends(get_current_user)):
     return {"ok": True}
 
 
+@api.post("/auth/forgot-password")
+async def forgot_password(body: ForgotPasswordIn):
+    """Send a 6-digit password reset code. Always returns ok to prevent email enumeration."""
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    email = body.email.lower().strip()
+    user = await db.users.find_one({"email": email}, {"_id": 0, "name": 1, "auth_provider": 1})
+    if user and user.get("auth_provider", "email") == "email":
+        await twilio_send_verification(email, "email")
+    return {"ok": True}
+
+
+@api.post("/auth/reset-password")
+async def reset_password(body: ResetPasswordIn):
+    """Verify the reset OTP via Twilio Verify and set a new password."""
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    if len(body.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    email = body.email.lower().strip()
+    ok = await twilio_check_verification(email, body.code.strip())
+    if not ok:
+        raise HTTPException(status_code=400, detail="Invalid or expired code")
+    await db.users.update_one(
+        {"email": email},
+        {"$set": {"password_hash": hash_password(body.new_password)}},
+    )
+    return {"ok": True}
+
+
 @api.post("/auth/verify-email")
 async def verify_email_endpoint(body: VerifyEmailIn, current=Depends(get_current_user)):
-    """Verify the 6-digit code sent to the user's email."""
+    """Verify the 6-digit code sent to the user's email via Twilio Verify."""
     if current.get("email_verified"):
         return {"ok": True, "user": user_to_out(current).model_dump()}
     email = body.email.lower().strip()
     if email != current["email"]:
         raise HTTPException(status_code=400, detail="Email mismatch")
-    ok = await check_verification_code(email, "email", body.code.strip())
+    ok = await twilio_check_verification(email, body.code.strip())
     if not ok:
         raise HTTPException(status_code=400, detail="Invalid or expired code")
     await db.users.update_one({"user_id": current["user_id"]}, {"$set": {"email_verified": True}})
     await award_points(current["user_id"], 25, "email_verified")
     user_doc = await db.users.find_one({"user_id": current["user_id"]}, {"_id": 0})
-    # Award referral bonus to referrer (only once, guard with referral_bonus_awarded flag)
+    # Award referral bonus to referrer (only once)
     referred_by = user_doc.get("referred_by")
     if referred_by and not user_doc.get("referral_bonus_awarded"):
         await award_points(referred_by, 200, "referral")
@@ -736,27 +821,25 @@ async def verify_email_endpoint(body: VerifyEmailIn, current=Depends(get_current
             {"user_id": current["user_id"]},
             {"$set": {"referral_bonus_awarded": True}},
         )
-    # Send welcome email after successful email verification
-    asyncio.create_task(send_welcome_email(user_doc["email"], user_doc.get("name", "")))
     return {"ok": True, "user": user_to_out(user_doc).model_dump()}
 
 
 @api.post("/auth/send-phone-code")
 async def send_phone_code(body: SendPhoneCodeIn, current=Depends(get_current_user)):
-    """Send a 6-digit SMS verification code to the given phone number."""
+    """Send SMS OTP via Twilio Verify."""
     phone = body.phone.strip()
-    code = await create_verification_code(phone, "phone")
-    await send_sms(phone, f"Your Wardrope verification code is: {code}. It expires in 10 minutes.")
-    # Store phone on user so it's available
     await db.users.update_one({"user_id": current["user_id"]}, {"$set": {"phone": phone}})
+    sent = await twilio_send_verification(phone, "sms")
+    if not sent:
+        raise HTTPException(status_code=503, detail="Could not send SMS — check phone number or try again")
     return {"ok": True}
 
 
 @api.post("/auth/verify-phone")
 async def verify_phone_endpoint(body: VerifyPhoneIn, current=Depends(get_current_user)):
-    """Verify the 6-digit SMS code sent to the user's phone."""
+    """Verify SMS OTP via Twilio Verify."""
     phone = body.phone.strip()
-    ok = await check_verification_code(phone, "phone", body.code.strip())
+    ok = await twilio_check_verification(phone, body.code.strip())
     if not ok:
         raise HTTPException(status_code=400, detail="Invalid or expired code")
     await db.users.update_one(
@@ -770,7 +853,11 @@ async def verify_phone_endpoint(body: VerifyPhoneIn, current=Depends(get_current
 
 @api.put("/users/me/profile")
 async def update_profile(body: ProfileUpdate, current=Depends(get_current_user)):
-    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    updates = body.model_dump(exclude_unset=True)
+    if "theme_id" in updates:
+        allowed_themes = {"editorial", "ivory", "midnight", "rose", "emerald"}
+        if updates["theme_id"] not in allowed_themes:
+            raise HTTPException(status_code=400, detail="Invalid theme_id")
     if updates:
         await db.users.update_one({"user_id": current["user_id"]}, {"$set": updates})
     # Award points when onboarding completes for the first time
@@ -1020,6 +1107,7 @@ def closet_doc_to_out(doc: dict, item_count: int = 0) -> ClosetOut:
         description=doc.get("description"),
         is_default=doc.get("is_default", False),
         item_count=item_count,
+        closet_type=doc.get("closet_type", "wardrobe"),
         created_at=doc["created_at"],
     )
 
@@ -1049,6 +1137,8 @@ def item_doc_to_out(d: Dict[str, Any]) -> ItemOut:
 # ---------------------- AI Endpoints ----------------------
 @api.post("/ai/tag-item")
 async def ai_tag_endpoint(body: TagRequest, current=Depends(get_current_user)):
+    if not _check_rate(current["user_id"], "tag", max_calls=30):
+        raise HTTPException(status_code=429, detail="Too many tagging requests. Try again in an hour.")
     if body.image_url:
         raw = await _claude_vision_url(_TAG_SYS_PROMPT, body.image_url, _TAG_SCHEMA_HINT, max_tokens=600)
         tags = _parse_tag_data(_safe_json_loads(raw) if raw else None)
@@ -1072,6 +1162,8 @@ async def presign_upload(body: PresignIn, current=Depends(get_current_user)):
 
 @api.post("/ai/stylist", response_model=StylistResponse)
 async def ai_stylist(body: StylistRequest, current=Depends(get_current_user)):
+    if not _check_rate(current["user_id"], "stylist", max_calls=10):
+        raise HTTPException(status_code=429, detail="Too many stylist requests. Try again in an hour.")
     cursor = db.items.find({"user_id": current["user_id"]}, {"_id": 0, "image_base64": 0})
     items: List[Dict[str, Any]] = await cursor.to_list(500)
     if not items:
@@ -1149,6 +1241,8 @@ async def barcode_lookup(body: BarcodeIn, current=Depends(get_current_user)):
                 params={"upc": barcode},
                 headers={"Accept": "application/json"},
             )
+        if r.status_code == 429:
+            return {"found": False, "reason": "rate_limited"}
         if r.status_code == 200:
             data = r.json()
             items_list = data.get("items") or []
@@ -1184,6 +1278,8 @@ async def barcode_add(body: BarcodeIn, current=Depends(get_current_user)):
                 params={"upc": barcode},
                 headers={"Accept": "application/json"},
             )
+        if r.status_code == 429:
+            return {"added": False, "reason": "Barcode lookup rate limit reached. Try again later."}
         if r.status_code == 200:
             items_list = r.json().get("items") or []
             if items_list:
@@ -1232,10 +1328,20 @@ async def barcode_add(body: BarcodeIn, current=Depends(get_current_user)):
     if tags is None:
         tags = ItemTags()
 
-    # 3. Resolve default closet
+    # 3. Resolve default closet — create one if it doesn't exist yet
     user_id = current["user_id"]
     closet = await db.closets.find_one({"user_id": user_id, "is_default": True})
-    closet_id = closet["closet_id"] if closet else None
+    if closet:
+        closet_id = closet["closet_id"]
+    else:
+        closet_id = "clt_" + uuid.uuid4().hex[:16]
+        await db.closets.insert_one({
+            "closet_id": closet_id,
+            "user_id": user_id,
+            "name": "My Wardrobe",
+            "is_default": True,
+            "created_at": utcnow(),
+        })
 
     # 4. Create item
     item_id = new_id("item")
@@ -1312,6 +1418,8 @@ async def create_item(body: CreateItemIn, current=Depends(get_current_user)):
         doc["price"] = body.price
     if body.purchased_at is not None:
         doc["purchased_at"] = body.purchased_at
+    if body.person_tag is not None:
+        doc["person_tag"] = body.person_tag
     if doc["fidelity_mode"] == "identified":
         # MOCKED identified mode (Ximilar/Google Lens not integrated yet)
         doc.setdefault("brand", None)
@@ -1319,6 +1427,7 @@ async def create_item(body: CreateItemIn, current=Depends(get_current_user)):
         doc["product_url"] = None
     await db.items.insert_one(doc)
     await award_points(current["user_id"], 10, "item_added")
+    asyncio.create_task(_record_activity(current["user_id"], "item_added", {"item_id": doc["item_id"], "name": name, "category": tags.category}))
     return {"item": item_doc_to_out(doc).model_dump()}
 
 
@@ -1330,6 +1439,7 @@ async def list_items(
     occasion: Optional[str] = None,
     favorite: Optional[bool] = None,
     closet_id: Optional[str] = None,
+    person_tag: Optional[str] = Query(None),
     current=Depends(get_current_user),
 ):
     q: Dict[str, Any] = {"user_id": current["user_id"]}
@@ -1345,6 +1455,8 @@ async def list_items(
         q["favorite"] = favorite
     if closet_id:
         q["closet_id"] = closet_id
+    if person_tag:
+        q["person_tag"] = person_tag
     cursor = db.items.find(q, {"_id": 0}).sort("created_at", -1)
     docs = await cursor.to_list(500)
     return {"items": [item_doc_to_out(d).model_dump() for d in docs]}
@@ -1371,6 +1483,8 @@ async def update_item(item_id: str, body: UpdateItemIn, current=Depends(get_curr
         updates["price"] = body.price
     if body.purchased_at is not None:
         updates["purchased_at"] = body.purchased_at
+    if body.person_tag is not None:
+        updates["person_tag"] = body.person_tag
     if not updates:
         d = await db.items.find_one({"item_id": item_id, "user_id": current["user_id"]}, {"_id": 0})
         if not d:
@@ -1407,6 +1521,7 @@ async def create_closet(body: CreateClosetIn, current=Depends(get_current_user))
         "name": body.name.strip(),
         "description": body.description,
         "is_default": is_default,
+        "closet_type": body.closet_type,
         "created_at": utcnow(),
     }
     await db.closets.insert_one(doc)
@@ -1497,6 +1612,7 @@ async def save_outfit(body: SaveOutfitIn, current=Depends(get_current_user)):
     }
     await db.outfits.insert_one(doc)
     await award_points(current["user_id"], 20, "outfit_saved")
+    asyncio.create_task(_record_activity(current["user_id"], "outfit_saved", {"outfit_id": doc["outfit_id"], "title": body.title}))
     return {"outfit": OutfitOut(**doc).model_dump()}
 
 
@@ -1541,7 +1657,7 @@ async def rate_outfit(outfit_id: str, body: OutfitRatingIn, current=Depends(get_
     if not res:
         raise HTTPException(status_code=404, detail="Outfit not found")
     res.pop("_id", None)
-    return {"outfit": res}
+    return {"outfit": OutfitOut(**res).model_dump()}
 
 
 # ---------------------- Lookbooks (curated mock data) ----------------------
@@ -1600,7 +1716,7 @@ async def get_lookbook(lookbook_id: str, current=Depends(get_current_user)):
 
 @api.post("/lookbooks/{lookbook_id}/recreate")
 async def recreate_lookbook(lookbook_id: str, current=Depends(get_current_user)):
-    """Asks GPT-5.2 to choose items from the user's closet that best match the lookbook vibe."""
+    """Asks the AI stylist to choose items from the user's closet that best match the lookbook vibe."""
     lb = next((x for x in LOOKBOOKS if x["lookbook_id"] == lookbook_id), None)
     if not lb:
         raise HTTPException(status_code=404, detail="Lookbook not found")
@@ -1762,6 +1878,8 @@ async def community_listings(current=Depends(get_current_user)):
 @api.get("/users/me/suggestions")
 async def get_suggestions(current=Depends(get_current_user)):
     """AI-generated wardrobe gap analysis with store links. Cached for 24h."""
+    if not _check_rate(current["user_id"], "suggestions", max_calls=5):
+        raise HTTPException(status_code=429, detail="Too many requests. Try again in an hour.")
     # Check cache
     cached = current.get("wardrobe_suggestions")
     cached_at = current.get("wardrobe_suggestions_at")
@@ -1922,141 +2040,169 @@ async def submit_feedback(body: FeedbackIn, current=Depends(get_current_user)):
     return {"ok": True}
 
 
-# ---------------------- Billing (Stripe) ----------------------
+# ---------------------- Billing (Square) ----------------------
+
+SQUARE_BASE_URL = (
+    "https://connect.squareup.com"
+    if SQUARE_ENVIRONMENT == "production"
+    else "https://connect.squareupsandbox.com"
+)
+
+
+def _square_headers() -> dict:
+    return {
+        "Authorization": f"Bearer {SQUARE_ACCESS_TOKEN}",
+        "Square-Version": "2024-01-17",
+        "Content-Type": "application/json",
+    }
+
+
+async def _square_create_payment_link(payload: dict) -> dict:
+    async with httpx.AsyncClient(timeout=15.0) as cli:
+        r = await cli.post(
+            f"{SQUARE_BASE_URL}/v2/online-checkout/payment-links",
+            headers=_square_headers(),
+            json=payload,
+        )
+    return r.json()
+
+
+async def _square_get_order(order_id: str) -> dict:
+    async with httpx.AsyncClient(timeout=15.0) as cli:
+        r = await cli.get(
+            f"{SQUARE_BASE_URL}/v2/orders/{order_id}",
+            headers=_square_headers(),
+        )
+    return r.json()
+
+
+def _verify_square_signature(payload: bytes, signature: str) -> bool:
+    if not SQUARE_WEBHOOK_SIGNATURE_KEY or not signature:
+        return False
+    import hmac as _hmac
+    import hashlib
+    import base64
+    mac = _hmac.new(
+        SQUARE_WEBHOOK_SIGNATURE_KEY.encode(),
+        (SQUARE_WEBHOOK_URL).encode() + payload,
+        hashlib.sha256,
+    )
+    expected = base64.b64encode(mac.digest()).decode()
+    return _hmac.compare_digest(signature, expected)
+
+
 @api.post("/billing/checkout")
 async def billing_checkout(body: CheckoutIn, current=Depends(get_current_user)):
-    """Create a Stripe Checkout session for the selected plan."""
-    if not STRIPE_SECRET_KEY:
+    """Create a Square payment link for the selected plan."""
+    if not SQUARE_ACCESS_TOKEN:
         raise HTTPException(status_code=503, detail="Billing not configured")
     plan_key = f"{body.plan}_{body.period}"
-    price_id = STRIPE_PRICES.get(plan_key)
-    if not price_id:
+    amount = PLAN_AMOUNTS_CENTS.get(plan_key)
+    if not amount:
         raise HTTPException(status_code=400, detail=f"Unknown plan: {plan_key}")
-
-    # Build line items
-    line_items = [{"price": price_id, "quantity": 1}]
+    user_id = current["user_id"]
+    ref_id = _sq_sub_ref(user_id, body.plan, body.period, body.addons)
+    line_items = [{
+        "name": PLAN_LABELS.get(plan_key, plan_key),
+        "quantity": "1",
+        "base_price_money": {"amount": amount, "currency": "USD"},
+    }]
     for addon in body.addons:
-        addon_price = STRIPE_PRICES.get(f"addon_{addon}")
-        if addon_price:
-            line_items.append({"price": addon_price, "quantity": 1})
-
-    # Get or create Stripe customer
-    customer_id = current.get("stripe_customer_id")
-    if not customer_id:
-        customer = stripe.Customer.create(
-            email=current["email"],
-            name=current.get("name", ""),
-            metadata={"user_id": current["user_id"]},
-        )
-        customer_id = customer["id"]
-        await db.users.update_one(
-            {"user_id": current["user_id"]},
-            {"$set": {"stripe_customer_id": customer_id}},
-        )
-
-    success_url = f"{APP_URL}?billing=success"
-    cancel_url = f"{APP_URL}?billing=cancel"
-    session = stripe.checkout.Session.create(
-        customer=customer_id,
-        mode="subscription",
-        line_items=line_items,
-        success_url=success_url,
-        cancel_url=cancel_url,
-        metadata={
-            "user_id": current["user_id"],
-            "plan": body.plan,
-            "period": body.period,
-            "addons": ",".join(body.addons),
+        addon_amount = PLAN_AMOUNTS_CENTS.get(f"addon_{addon}", 0)
+        if addon_amount:
+            line_items.append({
+                "name": ADDON_LABELS.get(addon, addon),
+                "quantity": "1",
+                "base_price_money": {"amount": addon_amount, "currency": "USD"},
+            })
+    result = await _square_create_payment_link({
+        "idempotency_key": str(uuid.uuid4()),
+        "order": {
+            "location_id": SQUARE_LOCATION_ID,
+            "reference_id": ref_id,
+            "line_items": line_items,
         },
-    )
-    return {"checkout_url": session["url"]}
+        "checkout_options": {
+            "redirect_url": f"{APP_URL}?billing=success",
+            "ask_for_shipping_address": False,
+        },
+    })
+    if "errors" in result:
+        logger.error(f"Square checkout error: {result['errors']}")
+        raise HTTPException(status_code=500, detail="Failed to create checkout")
+    return {"checkout_url": result["payment_link"]["url"]}
 
 
 @api.post("/billing/portal")
 async def billing_portal(current=Depends(get_current_user)):
-    """Create a Stripe Billing Portal session for managing/cancelling a subscription."""
-    if not STRIPE_SECRET_KEY:
-        raise HTTPException(status_code=503, detail="Billing not configured")
-    customer_id = current.get("stripe_customer_id")
-    if not customer_id:
-        raise HTTPException(status_code=400, detail="No active subscription found")
-    session = stripe.billing_portal.Session.create(
-        customer=customer_id,
-        return_url=f"{APP_URL}/profile",
+    """Square has no billing portal — return cancel endpoint info."""
+    return {
+        "portal_url": None,
+        "message": "To cancel your subscription, use the cancel option in Settings.",
+        "cancel_endpoint": "/api/billing/cancel",
+    }
+
+
+@api.post("/billing/cancel")
+async def billing_cancel(current=Depends(get_current_user)):
+    """Cancel the user's subscription immediately."""
+    await db.users.update_one(
+        {"user_id": current["user_id"]},
+        {"$set": {
+            "plan_type": "free",
+            "plan_period": "monthly",
+            "plan_addons": [],
+            "subscription_status": "cancelled",
+        }},
     )
-    return {"portal_url": session["url"]}
+    return {"ok": True}
 
 
 @api.post("/billing/webhook")
-async def billing_webhook(request: Request, stripe_signature: Optional[str] = Header(None, alias="stripe-signature")):
-    """Handle Stripe webhook events."""
+async def billing_webhook(
+    request: Request,
+    x_square_signature: Optional[str] = Header(None, alias="x-square-hmacsha256-signature"),
+):
+    """Handle Square webhook events."""
     body_bytes = await request.body()
-    if STRIPE_WEBHOOK_SECRET and stripe_signature:
-        try:
-            event = stripe.Webhook.construct_event(body_bytes, stripe_signature, STRIPE_WEBHOOK_SECRET)
-        except Exception as e:
-            logger.error(f"Stripe webhook signature error: {e}")
+    if SQUARE_WEBHOOK_SIGNATURE_KEY:
+        if not _verify_square_signature(body_bytes, x_square_signature or ""):
             raise HTTPException(status_code=400, detail="Invalid signature")
-    else:
-        # No secret configured — parse raw (dev mode only)
-        try:
-            event = json.loads(body_bytes)
-        except Exception:
-            raise HTTPException(status_code=400, detail="Invalid payload")
+    try:
+        event = json.loads(body_bytes)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid payload")
 
     etype = event.get("type", "")
-    data = event.get("data", {}).get("object", {})
 
-    if etype == "checkout.session.completed":
-        user_id = (data.get("metadata") or {}).get("user_id")
-        plan = (data.get("metadata") or {}).get("plan", "single")
-        period = (data.get("metadata") or {}).get("period", "monthly")
-        addons_str = (data.get("metadata") or {}).get("addons", "")
-        addons = [a for a in addons_str.split(",") if a]
-        sub_id = data.get("subscription")
-        amount_cents = data.get("amount_total") or 0
-        if user_id:
-            pts = math.floor(amount_cents / 100) * 50
-            await db.users.update_one(
-                {"user_id": user_id},
-                {"$set": {
-                    "plan_type": plan,
-                    "plan_period": period,
-                    "plan_addons": addons,
-                    "subscription_status": "active",
-                    "stripe_subscription_id": sub_id,
-                }},
-            )
-            if pts > 0:
-                await award_points(user_id, pts, "subscription_payment")
-
-    elif etype == "customer.subscription.updated":
-        sub_status = data.get("status", "")
-        customer_id = data.get("customer")
-        if customer_id:
-            user = await db.users.find_one({"stripe_customer_id": customer_id}, {"user_id": 1})
-            if user:
-                status_map = {"active": "active", "past_due": "past_due", "canceled": "cancelled"}
-                mapped = status_map.get(sub_status, sub_status)
-                await db.users.update_one(
-                    {"user_id": user["user_id"]},
-                    {"$set": {"subscription_status": mapped}},
-                )
-
-    elif etype == "customer.subscription.deleted":
-        customer_id = data.get("customer")
-        if customer_id:
-            user = await db.users.find_one({"stripe_customer_id": customer_id}, {"user_id": 1})
-            if user:
-                await db.users.update_one(
-                    {"user_id": user["user_id"]},
-                    {"$set": {
-                        "plan_type": "free",
-                        "plan_period": "monthly",
-                        "plan_addons": [],
-                        "subscription_status": "cancelled",
-                    }},
-                )
+    if etype == "payment.completed":
+        payment = event.get("data", {}).get("object", {}).get("payment", {})
+        order_id = payment.get("order_id")
+        amount_cents = (payment.get("amount_money") or {}).get("amount", 0)
+        if order_id and SQUARE_ACCESS_TOKEN:
+            order_result = await _square_get_order(order_id)
+            if "order" in order_result:
+                order = order_result["order"]
+                ref_id = order.get("reference_id", "")
+                decoded = _sq_decode_ref(ref_id)
+                if decoded:
+                    user_id = decoded["user_id"]
+                    if decoded["type"] == "points_purchase":
+                        await award_points(user_id, decoded["points"], "points_purchase")
+                    elif decoded["type"] == "subscription":
+                        pts = math.floor(amount_cents / 100) * 50
+                        await db.users.update_one(
+                            {"user_id": user_id},
+                            {"$set": {
+                                "plan_type": decoded["plan"],
+                                "plan_period": decoded["period"],
+                                "plan_addons": decoded["addons"],
+                                "subscription_status": "active",
+                                "square_order_id": order_id,
+                            }},
+                        )
+                        if pts > 0:
+                            await award_points(user_id, pts, "subscription_payment")
 
     return {"received": True}
 
@@ -2097,6 +2243,21 @@ async def redeem_points(body: PointsRedeemIn, current=Depends(get_current_user))
 @api.post("/scan/camera-roll")
 async def scan_camera_roll(body: CameraRollScanIn, current=Depends(get_current_user)):
     """Processes a list of photos — for each one, asks GPT to extract the main garment and adds it to the closet."""
+    # Resolve or create default closet once for the batch
+    closet = await db.closets.find_one({"user_id": current["user_id"], "is_default": True})
+    if not closet:
+        cid = "clt_" + uuid.uuid4().hex[:16]
+        await db.closets.insert_one({
+            "closet_id": cid,
+            "user_id": current["user_id"],
+            "name": "My Wardrobe",
+            "is_default": True,
+            "created_at": utcnow(),
+        })
+        closet_id = cid
+    else:
+        closet_id = closet["closet_id"]
+
     created: List[Dict[str, Any]] = []
     errors = 0
     for raw in body.images_base64[:10]:  # cap at 10 per batch
@@ -2106,6 +2267,7 @@ async def scan_camera_roll(body: CameraRollScanIn, current=Depends(get_current_u
             doc = {
                 "item_id": new_id("itm"),
                 "user_id": current["user_id"],
+                "closet_id": closet_id,
                 "name": tags.description or tags.type or "Item from photos",
                 "image_base64": b64,
                 "tags": tags.model_dump(),
@@ -2182,9 +2344,359 @@ async def scan_camera_roll_urls(body: CameraRollUrlScanIn, current=Depends(get_c
     return {"added": added, "errors": errors, "items": items}
 
 
+# ---------------------- Persons (Family/Couples plan) ----------------------
+@api.get("/users/me/persons")
+async def list_persons(current=Depends(get_current_user)):
+    user = await db.users.find_one({"user_id": current["user_id"]}, {"persons": 1, "plan_type": 1, "_id": 0})
+    persons = user.get("persons", []) if user else []
+    return {"persons": persons}
+
+@api.post("/users/me/persons")
+async def add_person(body: dict, current=Depends(get_current_user)):
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name required")
+    user = await db.users.find_one({"user_id": current["user_id"]}, {"persons": 1, "_id": 0})
+    persons = user.get("persons", []) if user else []
+    if len(persons) >= 10:
+        raise HTTPException(status_code=400, detail="Max 10 persons")
+    if name in persons:
+        raise HTTPException(status_code=400, detail="Person already exists")
+    persons.append(name)
+    await db.users.update_one({"user_id": current["user_id"]}, {"$set": {"persons": persons}})
+    return {"persons": persons}
+
+@api.delete("/users/me/persons/{name}")
+async def delete_person(name: str, current=Depends(get_current_user)):
+    user = await db.users.find_one({"user_id": current["user_id"]}, {"persons": 1, "_id": 0})
+    persons = [p for p in (user.get("persons") or []) if p != name]
+    await db.users.update_one({"user_id": current["user_id"]}, {"$set": {"persons": persons}})
+    return {"persons": persons}
+
+
+# ---------------------- Virtual SWAP Box ----------------------
+class SwapBoxListIn(BaseModel):
+    item_id: str
+    description: str = ""
+    points_cost: int = 200
+
+@api.post("/swapbox")
+async def swapbox_list(body: SwapBoxListIn, current=Depends(get_current_user)):
+    user_id = current["user_id"]
+    item = await db.items.find_one({"item_id": body.item_id, "user_id": user_id}, {"_id": 0})
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    existing = await db.swap_box.find_one({"item_id": body.item_id, "status": "available"})
+    if existing:
+        raise HTTPException(status_code=400, detail="Item already in Swap Box")
+    swb_id = "swb_" + uuid.uuid4().hex[:16]
+    user = await db.users.find_one({"user_id": user_id}, {"name": 1, "_id": 0})
+    doc = {
+        "swap_box_id": swb_id,
+        "user_id": user_id,
+        "owner_name": (user.get("name") or "").split()[0],
+        "item_id": body.item_id,
+        "item_name": item.get("name", ""),
+        "image_url": item.get("image_url", ""),
+        "tags": item.get("tags", {}),
+        "description": body.description,
+        "points_cost": max(50, min(1000, body.points_cost)),
+        "status": "available",
+        "claimed_by": None,
+        "claimed_at": None,
+        "created_at": utcnow(),
+    }
+    await db.swap_box.insert_one(doc)
+    await award_points(user_id, 100, "swap_box_listed")
+    asyncio.create_task(_record_activity(user_id, "swap_listed", {"swap_box_id": swb_id, "item_name": item.get("name", "")}))
+    return {"swap_box_id": swb_id, "points_awarded": 100}
+
+@api.get("/swapbox")
+async def swapbox_browse(current=Depends(get_current_user)):
+    user_id = current["user_id"]
+    cursor = db.swap_box.find({"status": "available", "user_id": {"$ne": user_id}}, {"_id": 0}).sort("created_at", -1)
+    listings = await cursor.to_list(100)
+    return {"items": listings}
+
+@api.get("/swapbox/mine")
+async def swapbox_mine(current=Depends(get_current_user)):
+    cursor = db.swap_box.find({"user_id": current["user_id"]}, {"_id": 0}).sort("created_at", -1)
+    listings = await cursor.to_list(50)
+    return {"items": listings}
+
+@api.post("/swapbox/{swap_box_id}/claim")
+async def swapbox_claim(swap_box_id: str, current=Depends(get_current_user)):
+    user_id = current["user_id"]
+    listing = await db.swap_box.find_one({"swap_box_id": swap_box_id}, {"_id": 0})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    if listing["status"] != "available":
+        raise HTTPException(status_code=400, detail="Already claimed")
+    if listing["user_id"] == user_id:
+        raise HTTPException(status_code=400, detail="Cannot claim own listing")
+    user = await db.users.find_one({"user_id": user_id}, {"points": 1, "_id": 0})
+    cost = listing["points_cost"]
+    current_pts = user.get("points") or 0
+    if current_pts < cost:
+        raise HTTPException(status_code=400, detail=f"Need {cost} points")
+    await db.users.update_one({"user_id": user_id}, {"$inc": {"points": -cost}})
+    await db.swap_box.update_one({"swap_box_id": swap_box_id}, {"$set": {"status": "claimed", "claimed_by": user_id, "claimed_at": utcnow()}})
+    return {"ok": True, "points_spent": cost, "points_remaining": current_pts - cost}
+
+@api.delete("/swapbox/{swap_box_id}")
+async def swapbox_remove(swap_box_id: str, current=Depends(get_current_user)):
+    listing = await db.swap_box.find_one({"swap_box_id": swap_box_id, "user_id": current["user_id"]}, {"_id": 0})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Not found")
+    if listing["status"] == "claimed":
+        raise HTTPException(status_code=400, detail="Already claimed, cannot remove")
+    await db.swap_box.delete_one({"swap_box_id": swap_box_id})
+    return {"ok": True}
+
+
+# ---------------------- Buy Points (Square) ----------------------
+class BuyPointsIn(BaseModel):
+    pack: str  # "points_starter" | "points_popular" | "points_best"
+
+POINTS_PACKS = {
+    "points_starter": {"points": 500,  "label": "Starter",    "price_cents": 99},
+    "points_popular": {"points": 1200, "label": "Popular",    "price_cents": 199},
+    "points_best":    {"points": 2800, "label": "Best Value", "price_cents": 399},
+}
+
+@api.post("/billing/buy-points")
+async def billing_buy_points(body: BuyPointsIn, current=Depends(get_current_user)):
+    if body.pack not in POINTS_PACKS:
+        raise HTTPException(status_code=400, detail="Invalid pack")
+    pack_info = POINTS_PACKS[body.pack]
+    user_id = current["user_id"]
+    if not SQUARE_ACCESS_TOKEN:
+        new_pts = await award_points(user_id, pack_info["points"], f"points_purchase_{body.pack}")
+        return {"ok": True, "checkout_url": None, "dev_mode": True, "points_awarded": pack_info["points"], "total_points": new_pts}
+    ref_id = _sq_pts_ref(user_id, body.pack, pack_info["points"])
+    result = await _square_create_payment_link({
+        "idempotency_key": str(uuid.uuid4()),
+        "order": {
+            "location_id": SQUARE_LOCATION_ID,
+            "reference_id": ref_id,
+            "line_items": [{
+                "name": f"{pack_info['label']} - {pack_info['points']} Points",
+                "quantity": "1",
+                "base_price_money": {"amount": pack_info["price_cents"], "currency": "USD"},
+            }],
+        },
+        "checkout_options": {
+            "redirect_url": f"{APP_URL}/buy-points?success=1&pack={body.pack}",
+            "ask_for_shipping_address": False,
+        },
+    })
+    if "errors" in result:
+        logger.error(f"Square buy-points error: {result['errors']}")
+        raise HTTPException(status_code=500, detail="Failed to create checkout")
+    return {"ok": True, "checkout_url": result["payment_link"]["url"]}
+
+
+# ---------------------- Geo Services ----------------------
+async def _places_nearby(lat: float, lng: float, keyword: str, radius: int = 5000) -> list:
+    if not GOOGLE_PLACES_API_KEY:
+        return []
+    url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+    params = {"location": f"{lat},{lng}", "radius": radius, "keyword": keyword, "key": GOOGLE_PLACES_API_KEY}
+    async with httpx.AsyncClient(timeout=10.0) as cli:
+        r = await cli.get(url, params=params)
+    if r.status_code != 200:
+        return []
+    results = r.json().get("results", [])
+    return [{"name": p.get("name"), "address": p.get("vicinity"), "rating": p.get("rating"), "place_id": p.get("place_id"), "open_now": p.get("opening_hours", {}).get("open_now")} for p in results[:10]]
+
+@api.get("/services/grooming")
+async def services_grooming(lat: float = Query(...), lng: float = Query(...), current=Depends(get_current_user)):
+    results = await _places_nearby(lat, lng, "pet grooming")
+    return {"results": results, "has_api_key": bool(GOOGLE_PLACES_API_KEY)}
+
+@api.get("/services/organizers")
+async def services_organizers(lat: float = Query(...), lng: float = Query(...), current=Depends(get_current_user)):
+    results = await _places_nearby(lat, lng, "closet organizer home organization")
+    return {"results": results, "has_api_key": bool(GOOGLE_PLACES_API_KEY)}
+
+@api.get("/services/drycleaners")
+async def services_drycleaners(lat: float = Query(...), lng: float = Query(...), current=Depends(get_current_user)):
+    results = await _places_nearby(lat, lng, "dry cleaner laundry")
+    return {"results": results, "has_api_key": bool(GOOGLE_PLACES_API_KEY)}
+
+class ServiceBookingIn(BaseModel):
+    service_type: str  # "drycleaner" | "organizer" | "groomer"
+    place_id: str
+    place_name: str
+    place_address: str
+    pickup_date: str  # ISO date string
+    notes: str = ""
+
+@api.post("/services/book")
+async def services_book(body: ServiceBookingIn, current=Depends(get_current_user)):
+    user_id = current["user_id"]
+    booking_id = "bkn_" + uuid.uuid4().hex[:16]
+    doc = {
+        "booking_id": booking_id,
+        "user_id": user_id,
+        "service_type": body.service_type,
+        "place_id": body.place_id,
+        "place_name": body.place_name,
+        "place_address": body.place_address,
+        "pickup_date": body.pickup_date,
+        "notes": body.notes,
+        "status": "confirmed",
+        "created_at": utcnow(),
+    }
+    await db.service_bookings.insert_one(doc)
+    await award_points(user_id, 50, f"service_booking_{body.service_type}")
+    return {"booking_id": booking_id, "points_awarded": 50}
+
+@api.get("/services/bookings")
+async def services_my_bookings(current=Depends(get_current_user)):
+    cursor = db.service_bookings.find({"user_id": current["user_id"]}, {"_id": 0}).sort("created_at", -1)
+    bookings = await cursor.to_list(50)
+    return {"bookings": bookings}
+
+
+# ---------------------- Friends ----------------------
+class FriendRequestIn(BaseModel):
+    email: str
+
+@api.post("/friends/request")
+async def friends_send_request(body: FriendRequestIn, current=Depends(get_current_user)):
+    user_id = current["user_id"]
+    target = await db.users.find_one({"email": body.email.lower().strip()}, {"user_id": 1, "name": 1, "_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target["user_id"] == user_id:
+        raise HTTPException(status_code=400, detail="Cannot add yourself")
+    existing = await db.friends.find_one({
+        "$or": [
+            {"from_user_id": user_id, "to_user_id": target["user_id"]},
+            {"from_user_id": target["user_id"], "to_user_id": user_id},
+        ]
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail="Request already exists or already friends")
+    req_id = "frq_" + uuid.uuid4().hex[:16]
+    me = await db.users.find_one({"user_id": user_id}, {"name": 1, "_id": 0})
+    await db.friends.insert_one({
+        "request_id": req_id,
+        "from_user_id": user_id,
+        "from_name": me.get("name", ""),
+        "to_user_id": target["user_id"],
+        "to_name": target.get("name", ""),
+        "status": "pending",
+        "created_at": utcnow(),
+    })
+    return {"request_id": req_id}
+
+@api.get("/friends/requests")
+async def friends_requests(current=Depends(get_current_user)):
+    user_id = current["user_id"]
+    cursor = db.friends.find({"$or": [{"from_user_id": user_id}, {"to_user_id": user_id}], "status": "pending"}, {"_id": 0}).sort("created_at", -1)
+    requests = await cursor.to_list(50)
+    return {"requests": requests}
+
+@api.post("/friends/request/{request_id}/respond")
+async def friends_respond(request_id: str, body: dict, current=Depends(get_current_user)):
+    action = body.get("action")  # "accept" | "reject"
+    req = await db.friends.find_one({"request_id": request_id, "to_user_id": current["user_id"], "status": "pending"})
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    new_status = "accepted" if action == "accept" else "rejected"
+    await db.friends.update_one({"request_id": request_id}, {"$set": {"status": new_status}})
+    return {"ok": True, "status": new_status}
+
+@api.get("/friends")
+async def friends_list(current=Depends(get_current_user)):
+    user_id = current["user_id"]
+    cursor = db.friends.find({"$or": [{"from_user_id": user_id}, {"to_user_id": user_id}], "status": "accepted"}, {"_id": 0})
+    accepted = await cursor.to_list(100)
+    friend_ids = []
+    for r in accepted:
+        fid = r["to_user_id"] if r["from_user_id"] == user_id else r["from_user_id"]
+        friend_ids.append(fid)
+    friends_data = []
+    for fid in friend_ids:
+        u = await db.users.find_one({"user_id": fid}, {"user_id": 1, "name": 1, "picture": 1, "points": 1, "_id": 0})
+        if u:
+            friends_data.append(u)
+    return {"friends": friends_data}
+
+@api.delete("/friends/{friend_user_id}")
+async def friends_remove(friend_user_id: str, current=Depends(get_current_user)):
+    user_id = current["user_id"]
+    await db.friends.delete_one({
+        "$or": [
+            {"from_user_id": user_id, "to_user_id": friend_user_id},
+            {"from_user_id": friend_user_id, "to_user_id": user_id},
+        ],
+        "status": "accepted",
+    })
+    return {"ok": True}
+
+@api.get("/friends/{friend_user_id}/profile")
+async def friends_profile(friend_user_id: str, current=Depends(get_current_user)):
+    user_id = current["user_id"]
+    # Check they are friends
+    rel = await db.friends.find_one({
+        "$or": [
+            {"from_user_id": user_id, "to_user_id": friend_user_id},
+            {"from_user_id": friend_user_id, "to_user_id": user_id},
+        ],
+        "status": "accepted",
+    })
+    if not rel:
+        raise HTTPException(status_code=403, detail="Not friends")
+    friend = await db.users.find_one({"user_id": friend_user_id}, {"user_id": 1, "name": 1, "picture": 1, "points": 1, "_id": 0})
+    if not friend:
+        raise HTTPException(status_code=404, detail="User not found")
+    # Get shared closets
+    closets_cursor = db.closets.find({"user_id": friend_user_id, "is_shared": True}, {"_id": 0, "closet_id": 1, "name": 1, "closet_type": 1})
+    shared_closets = await closets_cursor.to_list(20)
+    # Get public outfits (last 20)
+    outfits_cursor = db.outfits.find({"user_id": friend_user_id}, {"_id": 0, "outfit_id": 1, "title": 1, "description": 1, "occasion": 1, "item_ids": 1, "rating": 1, "created_at": 1}).sort("created_at", -1)
+    public_looks = await outfits_cursor.to_list(20)
+    return {"friend": friend, "shared_closets": shared_closets, "public_looks": public_looks}
+
+@api.get("/activity-feed")
+async def activity_feed(current=Depends(get_current_user)):
+    user_id = current["user_id"]
+    # Get friend IDs
+    cursor = db.friends.find({"$or": [{"from_user_id": user_id}, {"to_user_id": user_id}], "status": "accepted"}, {"_id": 0})
+    accepted = await cursor.to_list(100)
+    friend_ids = []
+    for r in accepted:
+        fid = r["to_user_id"] if r["from_user_id"] == user_id else r["from_user_id"]
+        friend_ids.append(fid)
+    if not friend_ids:
+        return {"events": []}
+    # Get activity events for friends
+    events_cursor = db.activity_feed.find({"user_id": {"$in": friend_ids}}, {"_id": 0}).sort("created_at", -1)
+    events = await events_cursor.to_list(50)
+    return {"events": events}
+
+
+async def _record_activity(user_id: str, event_type: str, data: dict):
+    user = await db.users.find_one({"user_id": user_id}, {"name": 1, "_id": 0})
+    await db.activity_feed.insert_one({
+        "activity_id": "act_" + uuid.uuid4().hex[:12],
+        "user_id": user_id,
+        "user_name": (user.get("name") or "").split()[0],
+        "event_type": event_type,
+        "data": data,
+        "created_at": utcnow(),
+    })
+
+
 # ---------------------- Admin / Migration ----------------------
 @api.post("/admin/migrate/closets")
-async def migrate_closets():
+async def migrate_closets(x_admin_secret: Optional[str] = Header(None)):
+    admin_secret = os.environ.get("ADMIN_SECRET", "")
+    if not admin_secret or x_admin_secret != admin_secret:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     users = await db.users.find({}, {"user_id": 1}).to_list(None)
     created = 0
     backfilled = 0
@@ -2214,13 +2726,24 @@ async def migrate_closets():
 async def root():
     return {"ok": True, "app": "wardrobe", "model": AI_SMART_MODEL}
 
+@api.get("/debug/db")
+async def debug_db():
+    """Public debug endpoint — tests DB connection."""
+    if db is None:
+        return {"db": "None — MONGO_URL not set"}
+    try:
+        result = await db.command("ping")
+        return {"db": "ok", "ping": result}
+    except Exception as e:
+        return {"db": "error", "error": type(e).__name__, "detail": str(e)}
+
 
 app.include_router(api)
 
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -2228,6 +2751,8 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
+    if JWT_SECRET == "dev_secret":
+        logger.warning("JWT_SECRET is using the insecure default. Set the JWT_SECRET environment variable in production.")
     if db is None:
         logger.warning("No MONGO_URL set — database disabled")
         return
@@ -2237,6 +2762,7 @@ async def startup():
         await db.user_sessions.create_index("session_token", unique=True)
         await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
         await db.items.create_index([("user_id", 1), ("created_at", -1)])
+        await db.items.create_index([("user_id", 1), ("closet_id", 1)])
         await db.outfits.create_index([("user_id", 1), ("created_at", -1)])
         await db.verification_codes.create_index("expires_at", expireAfterSeconds=0)
         await db.verification_codes.create_index([("target", 1), ("type", 1)], unique=True)
@@ -2244,6 +2770,11 @@ async def startup():
         await db.feedback.create_index([("user_id", 1), ("created_at", -1)])
         await db.closets.create_index([("user_id", 1)])
         await db.closets.create_index("closet_id", unique=True)
+        await db.swap_box.create_index([("status", 1), ("created_at", -1)])
+        await db.swap_box.create_index("item_id")
+        await db.friends.create_index([("from_user_id", 1), ("to_user_id", 1)])
+        await db.service_bookings.create_index([("user_id", 1), ("created_at", -1)])
+        await db.activity_feed.create_index([("user_id", 1), ("created_at", -1)])
         logger.info("Wardrobe API ready")
     except Exception as e:
         logger.error(f"DB index creation failed (check Atlas Network Access whitelist): {e}")
