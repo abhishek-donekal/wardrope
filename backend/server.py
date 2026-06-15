@@ -145,11 +145,15 @@ client = AsyncIOMotorClient(
 ) if MONGO_URL else None
 db = client[DB_NAME] if client else None
 
-CORS_ORIGINS = [
-    o.strip()
-    for o in os.environ.get("CORS_ORIGINS", "https://wardrope-red.vercel.app,https://whatsinmywardrobe.com,https://web-axb9d4u4g-abhsiheks-projects-351d4109.vercel.app").split(",")
-    if o.strip()
+# Always-allowed production origins (cannot be broken by an empty env var)
+_DEFAULT_ORIGINS = [
+    "https://whatsinmywardrobe.com",
+    "https://www.whatsinmywardrobe.com",
+    "https://wardrope-red.vercel.app",
 ]
+_ENV_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+# Merge env-provided origins with the defaults, de-duplicated
+CORS_ORIGINS = list(dict.fromkeys(_DEFAULT_ORIGINS + _ENV_ORIGINS))
 
 app = FastAPI(title="What's In My Wardrobe API", docs_url="/api/docs", redoc_url="/api/redoc")
 api = APIRouter(prefix="/api")
@@ -2744,6 +2748,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
     allow_origins=CORS_ORIGINS,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_methods=["*"],
     allow_headers=["*"],
 )
