@@ -151,9 +151,20 @@ _DEFAULT_ORIGINS = [
     "https://www.whatsinmywardrobe.com",
     "https://wardrope-red.vercel.app",
 ]
+# Local development origins (expo-web / Next dev / Metro). Safe to allow even in
+# production: a browser's Origin is set by where the page is actually served, so a
+# remote attacker cannot present "http://localhost:*" — only a dev client running on
+# the user's own machine matches. The API is Bearer-token based (no cookies), so this
+# does not expose credentials via CORS.
+_DEV_ORIGINS = [
+    "http://localhost:8090",
+    "http://localhost:3000",
+    "http://localhost:8081",
+    "http://localhost:19006",
+]
 _ENV_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
 # Merge env-provided origins with the defaults, de-duplicated
-CORS_ORIGINS = list(dict.fromkeys(_DEFAULT_ORIGINS + _ENV_ORIGINS))
+CORS_ORIGINS = list(dict.fromkeys(_DEFAULT_ORIGINS + _DEV_ORIGINS + _ENV_ORIGINS))
 
 app = FastAPI(title="What's In My Wardrobe API", docs_url="/api/docs", redoc_url="/api/redoc")
 api = APIRouter(prefix="/api")
