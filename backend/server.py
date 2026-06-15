@@ -685,7 +685,12 @@ async def auth_login(body: LoginIn):
     if not verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = issue_jwt(user["user_id"])
-    login_reward = await _check_login_reward(user["user_id"])
+    # Daily-login reward is non-essential — it must NEVER block authentication.
+    try:
+        login_reward = await _check_login_reward(user["user_id"])
+    except Exception as e:
+        logger.error(f"login_reward failed for {user['user_id']}: {e}")
+        login_reward = {"rewarded": False}
     return {"token": token, "user": user_to_out(user).model_dump(), "login_reward": login_reward}
 
 
