@@ -59,13 +59,17 @@ TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
 TWILIO_VERIFY_SID = os.environ.get("TWILIO_VERIFY_SID", "")
 
 # AWS S3 config
-# .strip() guards against trailing newline/whitespace that some env-setting tools
-# (e.g. piping a value into the Vercel CLI on Windows) append — a stray "\r\n" in a
-# bucket name or key makes S3 reject every request.
-AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID", "").strip()
-AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY", "").strip()
-S3_BUCKET = os.environ.get("S3_BUCKET", "").strip()
-S3_REGION = os.environ.get("S3_REGION", "us-east-1").strip()
+# Keep only printable ASCII — strips BOM (U+FEFF), whitespace, newlines, and control
+# chars that some env-setting tools prepend/append (e.g. piping a value into the Vercel
+# CLI on Windows adds a UTF-8 BOM). A stray BOM in a bucket name or key makes S3 reject
+# every request. AWS keys, bucket names, and regions are all pure printable ASCII.
+def _clean_env(name: str, default: str = "") -> str:
+    return "".join(c for c in os.environ.get(name, default) if 0x21 <= ord(c) <= 0x7E)
+
+AWS_ACCESS_KEY_ID = _clean_env("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = _clean_env("AWS_SECRET_ACCESS_KEY")
+S3_BUCKET = _clean_env("S3_BUCKET")
+S3_REGION = _clean_env("S3_REGION", "us-east-1")
 GOOGLE_PLACES_API_KEY = os.environ.get("GOOGLE_PLACES_API_KEY", "")
 
 # Plan amounts in cents
