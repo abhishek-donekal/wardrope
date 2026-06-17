@@ -59,10 +59,13 @@ TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
 TWILIO_VERIFY_SID = os.environ.get("TWILIO_VERIFY_SID", "")
 
 # AWS S3 config
-AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID", "")
-AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
-S3_BUCKET = os.environ.get("S3_BUCKET", "")
-S3_REGION = os.environ.get("S3_REGION", "us-east-1")
+# .strip() guards against trailing newline/whitespace that some env-setting tools
+# (e.g. piping a value into the Vercel CLI on Windows) append — a stray "\r\n" in a
+# bucket name or key makes S3 reject every request.
+AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID", "").strip()
+AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY", "").strip()
+S3_BUCKET = os.environ.get("S3_BUCKET", "").strip()
+S3_REGION = os.environ.get("S3_REGION", "us-east-1").strip()
 GOOGLE_PLACES_API_KEY = os.environ.get("GOOGLE_PLACES_API_KEY", "")
 
 # Plan amounts in cents
