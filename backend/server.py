@@ -208,7 +208,10 @@ async def generate_presigned_url(key: str, content_type: str = "image/jpeg", exp
         aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
         region_name=S3_REGION,
     )
-    async with session.client("s3") as s3:
+    # Pin the regional endpoint so the presigned host matches the bucket's region
+    # (the legacy global "s3.amazonaws.com" host signs as us-east-1 and rejects buckets
+    # in other regions with AuthorizationQueryParametersError).
+    async with session.client("s3", endpoint_url=f"https://s3.{S3_REGION}.amazonaws.com") as s3:
         url = await s3.generate_presigned_url(
             "put_object",
             Params={"Bucket": S3_BUCKET, "Key": key, "ContentType": content_type},
