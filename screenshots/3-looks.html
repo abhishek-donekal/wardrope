@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1242">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { width:1242px; height:2688px; background:#050505; font-family:-apple-system,sans-serif; overflow:hidden; position:relative; }
+  .status { display:flex; justify-content:space-between; align-items:center; padding:18px 48px 0; }
+  .time { color:#fff; font-size:36px; font-weight:600; }
+  .icons { color:#fff; font-size:28px; }
+  .header { padding:48px 48px 40px; }
+  .overline { color:#A3A3A3; font-size:24px; letter-spacing:3px; text-transform:uppercase; margin-bottom:10px; }
+  .h2 { color:#fff; font-family:Georgia,serif; font-size:72px; letter-spacing:-2px; }
+  .looks-grid { padding:0 48px; display:flex; flex-direction:column; gap:28px; }
+  .look-card { background:#121212; border:2px solid #2A2A2A; padding:36px; }
+  .look-meta { color:#A3A3A3; font-size:22px; letter-spacing:2px; text-transform:uppercase; margin-bottom:12px; }
+  .look-name { color:#fff; font-family:Georgia,serif; font-size:44px; margin-bottom:28px; }
+  .look-items { display:flex; gap:16px; }
+  .look-item { width:140px; height:165px; background:#1A1A1A; border:1px solid #333; display:flex; align-items:center; justify-content:center; font-size:56px; }
+  .look-footer { display:flex; justify-content:space-between; align-items:center; margin-top:24px; }
+  .look-tags { display:flex; gap:12px; }
+  .look-tag { padding:10px 20px; border:1px solid #333; border-radius:999px; color:#A3A3A3; font-size:20px; }
+  .heart { color:#C5A059; font-size:36px; }
+  .tab-bar { position:absolute; bottom:0; left:0; right:0; height:180px; background:#050505; border-top:1px solid #2A2A2A; display:flex; align-items:flex-start; justify-content:space-around; padding-top:24px; }
+  .tab { display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .tab-icon { font-size:44px; }
+  .tab-label { font-size:20px; color:#A3A3A3; }
+</style>
+</head>
+<body>
+  <div class="status"><span class="time">9:41</span><span class="icons"><svg style="display:inline-block;vertical-align:middle;margin:0 6px" width="56" height="32" viewBox="0 0 56 32" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="22" width="7" height="10" rx="1.5" fill="white"/><rect x="11" y="16" width="7" height="16" rx="1.5" fill="white"/><rect x="22" y="10" width="7" height="22" rx="1.5" fill="white"/><rect x="33" y="4" width="7" height="28" rx="1.5" fill="white"/></svg><svg style="display:inline-block;vertical-align:middle;margin:0 6px" width="44" height="32" viewBox="0 0 44 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><path d="M4 16 Q22 2 40 16"/><path d="M10 22 Q22 12 34 22"/><circle cx="22" cy="26" r="2" fill="white" stroke="none"/></svg><svg style="display:inline-block;vertical-align:middle;margin:0 6px" width="60" height="32" viewBox="0 0 60 32" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="8" width="48" height="20" rx="5" fill="none" stroke="white" stroke-width="2.5"/><rect x="50" y="14" width="4" height="8" rx="1.5" fill="white"/><rect x="6" y="12" width="36" height="12" rx="2.5" fill="white"/></svg></span></div>
+  <div class="header">
+    <div class="overline">Saved outfits</div>
+    <div class="h2">Your looks</div>
+  </div>
+  <div class="looks-grid">
+    <div class="look-card">
+      <div class="look-meta">Dinner · Date night</div>
+      <div class="look-name">Smart Casual Evening</div>
+      <div class="look-items">
+        <div class="look-item">👔</div>
+        <div class="look-item">👖</div>
+        <div class="look-item">🧥</div>
+        <div class="look-item">👟</div>
+      </div>
+      <div class="look-footer">
+        <div class="look-tags">
+          <div class="look-tag">Smart</div>
+          <div class="look-tag">Casual</div>
+        </div>
+        <div class="heart">♥</div>
+      </div>
+    </div>
+    <div class="look-card">
+      <div class="look-meta">Work · Monday</div>
+      <div class="look-name">Power Monday</div>
+      <div class="look-items">
+        <div class="look-item">🧥</div>
+        <div class="look-item">👔</div>
+        <div class="look-item">👗</div>
+        <div class="look-item">👜</div>
+      </div>
+      <div class="look-footer">
+        <div class="look-tags">
+          <div class="look-tag">Formal</div>
+          <div class="look-tag">Work</div>
+        </div>
+        <div class="heart">♥</div>
+      </div>
+    </div>
+    <div class="look-card">
+      <div class="look-meta">Weekend · Brunch</div>
+      <div class="look-name">Sunday Brunch Vibes</div>
+      <div class="look-items">
+        <div class="look-item">👗</div>
+        <div class="look-item">👟</div>
+        <div class="look-item">👜</div>
+      </div>
+      <div class="look-footer">
+        <div class="look-tags">
+          <div class="look-tag">Relaxed</div>
+          <div class="look-tag">Summer</div>
+        </div>
+        <div class="heart" style="color:#A3A3A3;">♡</div>
+      </div>
+    </div>
+  </div>
+  <div class="tab-bar">
+    <div class="tab"><div class="tab-icon">🧥</div><div class="tab-label">Closet</div></div>
+    <div class="tab"><div class="tab-icon">✨</div><div class="tab-label" style="color:#C5A059;">Looks</div></div>
+    <div class="tab"><div class="tab-icon">🪄</div><div class="tab-label">Stylist</div></div>
+    <div class="tab"><div class="tab-icon">🛍</div><div class="tab-label">Shop</div></div>
+    <div class="tab"><div class="tab-icon">👤</div><div class="tab-label">Profile</div></div>
+  </div>
+</body>
+</html>

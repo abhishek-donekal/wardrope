@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1242">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { width:1242px; height:2688px; background:#050505; font-family:-apple-system,sans-serif; overflow:hidden; position:relative; }
+  .status { display:flex; justify-content:space-between; align-items:center; padding:18px 48px 0; }
+  .time { color:#fff; font-size:36px; font-weight:600; }
+  .icons { color:#fff; font-size:28px; }
+  .topbar { display:flex; align-items:center; justify-content:space-between; padding:36px 48px 0; }
+  .back { color:#C5A059; font-size:40px; }
+  .topbar-title { color:#fff; font-family:Georgia,serif; font-size:40px; }
+  .save-btn { color:#C5A059; font-size:32px; font-weight:600; }
+  .photo-zone { margin:40px 48px 0; background:#121212; border:2px solid #2A2A2A; aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:24px; position:relative; overflow:hidden; }
+  .photo-zone .item-preview { font-size:200px; }
+  .photo-zone .gradient { position:absolute; bottom:0; left:0; right:0; height:200px; background:linear-gradient(transparent,rgba(5,5,5,0.9)); display:flex; align-items:flex-end; padding:32px; }
+  .photo-zone .retake { color:#fff; font-size:28px; background:rgba(0,0,0,0.5); border:2px solid #fff; padding:16px 32px; border-radius:999px; }
+  .ai-tags { margin:32px 48px 0; }
+  .section-label { color:#A3A3A3; font-size:22px; letter-spacing:2px; text-transform:uppercase; margin-bottom:20px; }
+  .tags-row { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:32px; }
+  .ai-tag { padding:14px 28px; background:rgba(197,160,89,0.12); border:2px solid #C5A059; border-radius:999px; color:#C5A059; font-size:24px; font-weight:600; }
+  .field { margin-bottom:32px; }
+  .field-label { color:#A3A3A3; font-size:22px; letter-spacing:2px; text-transform:uppercase; margin-bottom:14px; }
+  .field-value { color:#fff; font-size:32px; border-bottom:2px solid #333; padding-bottom:16px; }
+  .field-value.placeholder { color:#555; }
+  .save-full { position:absolute; bottom:200px; left:48px; right:48px; background:#C5A059; padding:40px; border-radius:4px; display:flex; align-items:center; justify-content:center; }
+  .save-full span { color:#000; font-size:32px; font-weight:700; letter-spacing:1px; }
+  .tab-bar { position:absolute; bottom:0; left:0; right:0; height:180px; background:#050505; border-top:1px solid #2A2A2A; display:flex; align-items:flex-start; justify-content:space-around; padding-top:24px; }
+  .tab { display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .tab-icon { font-size:44px; }
+  .tab-label { font-size:20px; color:#A3A3A3; }
+</style>
+</head>
+<body>
+  <div class="status"><span class="time">9:41</span><span class="icons"><svg style="display:inline-block;vertical-align:middle;margin:0 6px" width="56" height="32" viewBox="0 0 56 32" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="22" width="7" height="10" rx="1.5" fill="white"/><rect x="11" y="16" width="7" height="16" rx="1.5" fill="white"/><rect x="22" y="10" width="7" height="22" rx="1.5" fill="white"/><rect x="33" y="4" width="7" height="28" rx="1.5" fill="white"/></svg><svg style="display:inline-block;vertical-align:middle;margin:0 6px" width="44" height="32" viewBox="0 0 44 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><path d="M4 16 Q22 2 40 16"/><path d="M10 22 Q22 12 34 22"/><circle cx="22" cy="26" r="2" fill="white" stroke="none"/></svg><svg style="display:inline-block;vertical-align:middle;margin:0 6px" width="60" height="32" viewBox="0 0 60 32" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="8" width="48" height="20" rx="5" fill="none" stroke="white" stroke-width="2.5"/><rect x="50" y="14" width="4" height="8" rx="1.5" fill="white"/><rect x="6" y="12" width="36" height="12" rx="2.5" fill="white"/></svg></span></div>
+  <div class="topbar">
+    <span class="back">‹</span>
+    <span class="topbar-title">Add item</span>
+    <span class="save-btn">Save</span>
+  </div>
+  <div class="photo-zone">
+    <div class="item-preview">👔</div>
+    <div class="gradient">
+      <span class="retake">Retake</span>
+    </div>
+  </div>
+  <div class="ai-tags" style="margin-top:40px;">
+    <div class="section-label">✦ AI detected</div>
+    <div class="tags-row">
+      <div class="ai-tag">Tops</div>
+      <div class="ai-tag">White</div>
+      <div class="ai-tag">Cotton</div>
+      <div class="ai-tag">Formal</div>
+      <div class="ai-tag">All seasons</div>
+    </div>
+    <div class="field">
+      <div class="field-label">Name</div>
+      <div class="field-value">White Oxford Shirt</div>
+    </div>
+    <div class="field">
+      <div class="field-label">Brand</div>
+      <div class="field-value placeholder">Add brand (optional)</div>
+    </div>
+    <div class="field">
+      <div class="field-label">Notes</div>
+      <div class="field-value placeholder">Add notes (optional)</div>
+    </div>
+  </div>
+  <div class="save-full"><span>Save to wardrobe</span></div>
+  <div class="tab-bar">
+    <div class="tab"><div class="tab-icon">🧥</div><div class="tab-label" style="color:#C5A059;">Closet</div></div>
+    <div class="tab"><div class="tab-icon">✨</div><div class="tab-label">Looks</div></div>
+    <div class="tab"><div class="tab-icon">🪄</div><div class="tab-label">Stylist</div></div>
+    <div class="tab"><div class="tab-icon">🛍</div><div class="tab-label">Shop</div></div>
+    <div class="tab"><div class="tab-icon">👤</div><div class="tab-label">Profile</div></div>
+  </div>
+</body>
+</html>

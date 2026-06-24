@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,12 +9,14 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Linking,
 } from "react-native";
-import { useRouter, Link } from "expo-router";
+import { useRouter, Link, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useAuth } from "@/src/contexts/AuthContext";
+import { useResponsive } from "@/src/hooks/use-responsive";
 import { colors, type, space } from "@/src/theme";
 
 function formatPhone(raw: string): string {
@@ -27,11 +29,17 @@ function formatPhone(raw: string): string {
 export default function Register() {
   const { register } = useAuth();
   const router = useRouter();
+  const { isTablet } = useResponsive();
+  const params = useLocalSearchParams<{ ref?: string }>();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
-  const [referralCode, setReferralCode] = useState("");
+  const [referralCode, setReferralCode] = useState(params.ref ? params.ref.toUpperCase() : "");
+
+  useEffect(() => {
+    if (params.ref) setReferralCode(params.ref.toUpperCase());
+  }, [params.ref]);
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -63,7 +71,7 @@ export default function Register() {
   return (
     <SafeAreaView style={styles.root} testID="register-screen" edges={["top", "left", "right"]}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={[styles.form, isTablet && styles.formTablet]} keyboardShouldPersistTaps="handled">
           <TouchableOpacity onPress={() => router.back()} style={styles.back} testID="register-back-btn">
             <Ionicons name="chevron-back" size={24} color={colors.text} />
           </TouchableOpacity>
@@ -157,6 +165,13 @@ export default function Register() {
             )}
           </TouchableOpacity>
 
+          <Text style={styles.legal}>
+            By continuing you agree to our{" "}
+            <Text style={styles.legalLink} onPress={() => router.push("/terms" as any)}>Terms of Use</Text>
+            {" "}and{" "}
+            <Text style={styles.legalLink} onPress={() => router.push("/privacy-policy" as any)}>Privacy Policy</Text>.
+          </Text>
+
           <View style={styles.footer}>
             <Text style={type.bodySm}>Already have an account? </Text>
             <Link href="/auth/login" asChild>
@@ -174,6 +189,7 @@ export default function Register() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   form: { paddingHorizontal: space.lg, paddingBottom: space.xxl },
+  formTablet: { width: "100%", maxWidth: 480, alignSelf: "center" },
   back: { paddingVertical: space.sm, marginBottom: space.md, marginLeft: -8 },
   label: { ...type.overline, fontSize: 11, marginBottom: 6 },
   optional: { color: colors.textSecondary, fontWeight: "400", letterSpacing: 0 },
@@ -199,6 +215,8 @@ const styles = StyleSheet.create({
     marginTop: space.xl,
   },
   primaryBtnText: { color: colors.textInverse, fontWeight: "700", letterSpacing: 1, fontSize: 14 },
+  legal: { color: colors.textSecondary, fontSize: 12, textAlign: "center", marginTop: space.lg, lineHeight: 18 },
+  legalLink: { color: colors.accent, fontWeight: "600" },
   footer: { flexDirection: "row", justifyContent: "center", marginTop: space.lg },
   err: {
     color: "#FF7A7A",

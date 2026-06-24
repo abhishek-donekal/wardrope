@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:1024px; height:1024px; }
+body { background:#1A1A1A; }
+.frame {
+  width:1024px; height:1024px; position:relative;
+  background:#1A1A1A;
+}
+.frame::before {
+  content:""; position:absolute; inset:0;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255,255,255,0.04), transparent 40%),
+    radial-gradient(circle at 70% 80%, rgba(0,0,0,0.35), transparent 50%);
+}
+.mark-wrap {
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+}
+.mark-svg { width:780px; height:780px; }
+
+.wordmark {
+  position:absolute; bottom:130px; left:0; right:0; text-align:center;
+  color:#EFE4D2; opacity:0.85;
+  font-family:-apple-system,Helvetica,Arial,sans-serif;
+  font-size:32px; font-weight:500;
+  letter-spacing:28px; text-transform:uppercase; text-indent:28px;
+}
+</style></head><body>
+<div class="frame">
+  <div class="mark-wrap">
+    <svg class="mark-svg" viewBox="0 0 780 780" fill="none">
+      <!-- Elegant hanger: curved hook + gentle arch bar -->
+      <g stroke="#EFE4D2" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" fill="none">
+        <!-- Hook -->
+        <path d="M 390 100
+                 C 390 160, 460 160, 460 110
+                 C 460 92, 448 80, 432 80"/>
+        <!-- Gentle arch bar (smooth wide arc) -->
+        <path d="M 160 320
+                 Q 390 200, 620 320"/>
+      </g>
+
+      <!-- Garment: elegant sleeveless blouse / dress silhouette -->
+      <g fill="#C5A059">
+        <!-- shoulders meet the hanger ends, body widens slightly, hem flares -->
+        <path d="M 175 320
+                 C 215 330, 245 345, 270 360
+                 L 290 420
+                 C 290 470, 285 520, 275 570
+                 C 260 620, 250 660, 250 680
+                 L 530 680
+                 C 530 660, 520 620, 505 570
+                 C 495 520, 490 470, 490 420
+                 L 510 360
+                 C 535 345, 565 330, 605 320
+                 L 620 320
+                 Q 390 380, 160 320
+                 Z"/>
+      </g>
+
+      <!-- Subtle neckline detail on garment -->
+      <path d="M 340 320 Q 390 360, 440 320"
+            stroke="#1A1A1A" stroke-width="6" fill="none" stroke-linecap="round" opacity="0.6"/>
+    </svg>
+  </div>
+  <div class="wordmark">WARDROBE</div>
+</div>
+</body></html>

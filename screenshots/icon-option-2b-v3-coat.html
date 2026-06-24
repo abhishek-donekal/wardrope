@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:1024px; height:1024px; }
+body { background:#1A1A1A; }
+.frame {
+  width:1024px; height:1024px; position:relative;
+  background:#1A1A1A;
+}
+.frame::before {
+  content:""; position:absolute; inset:0;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255,255,255,0.04), transparent 40%),
+    radial-gradient(circle at 70% 80%, rgba(0,0,0,0.35), transparent 50%);
+}
+.mark-wrap {
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+}
+.mark-svg { width:780px; height:780px; }
+
+.wordmark {
+  position:absolute; bottom:130px; left:0; right:0; text-align:center;
+  color:#EFE4D2; opacity:0.85;
+  font-family:-apple-system,Helvetica,Arial,sans-serif;
+  font-size:32px; font-weight:500;
+  letter-spacing:28px; text-transform:uppercase; text-indent:28px;
+}
+</style></head><body>
+<div class="frame">
+  <div class="mark-wrap">
+    <svg class="mark-svg" viewBox="0 0 780 780" fill="none">
+      <!-- Refined slim hanger (thin profile) -->
+      <g stroke="#EFE4D2" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" fill="none">
+        <!-- hook -->
+        <path d="M 390 110
+                 C 390 158, 445 158, 445 120"/>
+        <!-- gentle arched bar -->
+        <path d="M 200 290 Q 390 215, 580 290"/>
+      </g>
+
+      <!-- Camel coat / blazer silhouette: clean, architectural, with lapels -->
+      <g fill="#C5A059">
+        <!-- left half from shoulder down to hem -->
+        <path d="M 215 290
+                 L 290 305
+                 L 325 360
+                 L 245 410
+                 L 230 530
+                 L 250 660
+                 L 290 700
+                 L 388 700
+                 L 388 380
+                 L 360 290
+                 Z"/>
+        <!-- right half mirror -->
+        <path d="M 565 290
+                 L 490 305
+                 L 455 360
+                 L 535 410
+                 L 550 530
+                 L 530 660
+                 L 490 700
+                 L 392 700
+                 L 392 380
+                 L 420 290
+                 Z"/>
+      </g>
+
+      <!-- Lapel outlines (subtle darker accents) -->
+      <g stroke="#1A1A1A" stroke-width="5" fill="none" opacity="0.55" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M 360 290 L 388 380"/>
+        <path d="M 420 290 L 392 380"/>
+        <!-- center seam -->
+        <path d="M 390 380 L 390 700"/>
+      </g>
+
+      <!-- Two small dark buttons -->
+      <circle cx="390" cy="475" r="9" fill="#1A1A1A" opacity="0.7"/>
+      <circle cx="390" cy="555" r="9" fill="#1A1A1A" opacity="0.7"/>
+    </svg>
+  </div>
+  <div class="wordmark">WARDROBE</div>
+</div>
+</body></html>

@@ -14,6 +14,7 @@ import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { api } from "@/src/lib/api";
+import { useResponsive } from "@/src/hooks/use-responsive";
 import { colors, type, space } from "@/src/theme";
 
 type Suggestion = {
@@ -33,6 +34,7 @@ const STORE_ICONS: Record<string, string> = {
 };
 
 export default function Shop() {
+  const { isTablet } = useResponsive();
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -88,7 +90,7 @@ export default function Shop() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={[styles.scroll, isTablet && styles.scrollTablet]}
           refreshControl={<RefreshControl tintColor={colors.accent} refreshing={refreshing} onRefresh={refresh} />}
         >
           <Text style={[type.bodySm, styles.intro]}>
@@ -159,6 +161,7 @@ const styles = StyleSheet.create({
   },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   scroll: { padding: space.lg, paddingBottom: 120 },
+  scrollTablet: { width: "100%", maxWidth: 720, alignSelf: "center" },
   intro: {
     color: colors.textSecondary,
     marginBottom: space.lg,

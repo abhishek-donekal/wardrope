@@ -16,7 +16,10 @@ import { LinearGradient } from "expo-linear-gradient";
 
 import { api } from "@/src/lib/api";
 import { useAuth } from "@/src/contexts/AuthContext";
+import { useTheme } from "@/src/contexts/ThemeContext";
+import { useResponsive } from "@/src/hooks/use-responsive";
 import { colors, type, space } from "@/src/theme";
+import { THEME_MAP } from "@/src/themes/presets";
 
 function pointsLevel(pts: number): string {
   if (pts >= 1000) return "Platinum";
@@ -35,6 +38,8 @@ const PERSONA_META: Record<string, { name: string; emoji: string; tagline: strin
 
 export default function Profile() {
   const { user, logout, setUser, isDemoMode, exitDemoMode } = useAuth();
+  const { themeId } = useTheme();
+  const { isTablet } = useResponsive();
   const router = useRouter();
   const [stats, setStats] = useState({ items: 0, outfits: 0 });
 
@@ -64,7 +69,7 @@ export default function Profile() {
   const onLogout = async () => {
     // Use native browser confirm on web (Alert.alert is unreliable in static Expo web builds)
     if (Platform.OS === "web") {
-      if (typeof window !== "undefined" && !window.confirm("Sign out of Wardrope?")) return;
+      if (typeof window !== "undefined" && !window.confirm("Sign out of Wardrobe?")) return;
       await logout();
       router.replace("/auth/login");
       return;
@@ -80,6 +85,54 @@ export default function Profile() {
         },
       },
     ]);
+  };
+
+  const performAccountDeletion = async () => {
+    try {
+      await api("/users/me", { method: "DELETE" });
+      await logout();
+      router.replace("/auth/login");
+    } catch (e: any) {
+      const msg = e?.message || "Could not delete account. Please try again or contact support.";
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.alert(msg);
+      } else {
+        Alert.alert("Error", msg);
+      }
+    }
+  };
+
+  const onDeleteAccount = () => {
+    const warning =
+      "This will permanently delete your account, wardrobe items, outfits, and all associated data. This cannot be undone.";
+    if (Platform.OS === "web") {
+      if (typeof window === "undefined") return;
+      if (!window.confirm(`${warning}\n\nDelete your account?`)) return;
+      if (!window.confirm("Are you absolutely sure? This is your final confirmation.")) return;
+      performAccountDeletion();
+      return;
+    }
+    Alert.alert(
+      "Delete account",
+      warning,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Final confirmation",
+              "Are you absolutely sure? This cannot be undone.",
+              [
+                { text: "Cancel", style: "cancel" },
+                { text: "Delete forever", style: "destructive", onPress: performAccountDeletion },
+              ]
+            );
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -103,10 +156,10 @@ export default function Profile() {
         </SafeAreaView>
       </ImageBackground>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={[styles.scroll, isTablet && styles.scrollTablet]}>
         {isDemoMode && (
           <View style={styles.demoBanner}>
-            <Text style={styles.demoBannerTitle}>You're previewing Wardrope</Text>
+            <Text style={styles.demoBannerTitle}>You're previewing Wardrobe</Text>
             <Text style={styles.demoBannerSub}>
               Sign in or create an account to save your wardrobe
             </Text>
@@ -129,11 +182,20 @@ export default function Profile() {
 
         {/* Points badge */}
         {user && (
-          <View style={styles.pointsRow}>
-            <Ionicons name="trophy-outline" size={16} color={colors.accent} />
-            <Text style={styles.pointsText}>
-              {user.points ?? 0} pts · {pointsLevel(user.points ?? 0)}
-            </Text>
+          <View style={styles.pointsRowWrap}>
+            <View style={styles.pointsRow}>
+              <Ionicons name="trophy-outline" size={16} color={colors.accent} />
+              <Text style={styles.pointsText}>
+                {user.points ?? 0} pts · {pointsLevel(user.points ?? 0)}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.buyPtsBtn}
+              onPress={() => router.push("/buy-points")}
+            >
+              <Ionicons name="add-circle-outline" size={14} color={colors.textInverse} />
+              <Text style={styles.buyPtsBtnText}>Buy Points</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -159,6 +221,27 @@ export default function Profile() {
             testID="profile-row-listings"
           />
           <Row
+            icon="cube-outline"
+            label="Virtual SWAP Box"
+            sub="Browse and list items for points"
+            onPress={() => router.push("/swapbox")}
+            testID="profile-row-swapbox"
+          />
+          <Row
+            icon="people-outline"
+            label="Friends"
+            sub="Connect with other Wardrobe users"
+            onPress={() => router.push("/friends")}
+            testID="profile-row-friends"
+          />
+          <Row
+            icon="pulse-outline"
+            label="Activity Feed"
+            sub="See what your friends are wearing"
+            onPress={() => router.push("/activity-feed")}
+            testID="profile-row-activity-feed"
+          />
+          <Row
             icon="play-circle-outline"
             label="Vlog"
             sub="Style tips & inspiration"
@@ -168,6 +251,13 @@ export default function Profile() {
         </Section>
 
         <Section title="Personalization">
+          <Row
+            icon="color-palette-outline"
+            label="Theme"
+            sub={THEME_MAP[themeId]?.name ?? "Editorial"}
+            onPress={() => router.push("/theme-picker")}
+            testID="profile-row-theme"
+          />
           <Row
             icon="sparkles-outline"
             label="Your stylist"
@@ -194,21 +284,40 @@ export default function Profile() {
           />
           <Row
             icon="options-outline"
-            label="Cataloging fidelity"
-            sub={user?.fidelity_mode === "identified" ? "Identified · brand lookup (mocked)" : "Descriptive · fast tagging"}
-            onPress={toggleFidelity}
+            label="Brand identification"
+            sub="Coming soon — AI brand recognition"
+            onPress={() => {}}
             testID="profile-row-fidelity"
             chevron={false}
             trailing={
-              <View style={[styles.toggle, user?.fidelity_mode === "identified" && styles.toggleOn]}>
-                <View
-                  style={[
-                    styles.toggleKnob,
-                    { left: user?.fidelity_mode === "identified" ? 22 : 2 },
-                  ]}
-                />
+              <View style={styles.comingSoonBadge}>
+                <Text style={styles.comingSoonText}>Soon</Text>
               </View>
             }
+          />
+        </Section>
+
+        <Section title="Services">
+          <Row
+            icon="paw-outline"
+            label="Find Groomer"
+            sub="Pet grooming services near you"
+            onPress={() => router.push("/grooming")}
+            testID="profile-row-grooming"
+          />
+          <Row
+            icon="filing-outline"
+            label="Closet Organizers"
+            sub="Professional organizers near you"
+            onPress={() => router.push("/organizers")}
+            testID="profile-row-organizers"
+          />
+          <Row
+            icon="color-wand-outline"
+            label="Dry Cleaners"
+            sub="Schedule pickup, earn 50 pts"
+            onPress={() => router.push("/drycleaners")}
+            testID="profile-row-drycleaners"
           />
         </Section>
 
@@ -249,9 +358,29 @@ export default function Profile() {
               danger
             />
           )}
+          {!isDemoMode && (
+            <Row
+              icon="trash-outline"
+              label="Delete account"
+              sub="Permanently remove your account and data"
+              onPress={onDeleteAccount}
+              testID="profile-delete-account-btn"
+              danger
+            />
+          )}
         </Section>
 
-        <Text style={styles.footer}>{"What's In My Wardrobe · v0.1"}</Text>
+        <Text style={styles.footer}>{"Wardrobe · v1.0.0"}{"\n"}
+          <Text
+            style={[styles.footer, { color: colors.accent }]}
+            onPress={() => router.push("/privacy-policy" as any)}
+          >Privacy Policy</Text>
+          {"  ·  "}
+          <Text
+            style={[styles.footer, { color: colors.accent }]}
+            onPress={() => router.push("/terms" as any)}
+          >Terms of Use</Text>
+        </Text>
       </ScrollView>
     </View>
   );
@@ -312,6 +441,7 @@ const styles = StyleSheet.create({
   hero: { height: 240, justifyContent: "flex-end" },
   heroInner: { paddingHorizontal: space.lg, paddingBottom: space.lg },
   scroll: { padding: space.lg, paddingBottom: 140 },
+  scrollTablet: { width: "100%", maxWidth: 720, alignSelf: "center" },
   statsRow: {
     flexDirection: "row",
     borderWidth: 1,
@@ -366,12 +496,34 @@ const styles = StyleSheet.create({
   },
   demoBannerBtnText: { color: colors.textInverse, fontWeight: "700", fontSize: 14 },
   footer: { color: colors.textSecondary, textAlign: "center", marginTop: space.xxl, fontSize: 11 },
+  comingSoonBadge: {
+    backgroundColor: colors.border,
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  comingSoonText: { color: colors.textSecondary, fontSize: 11, fontWeight: "600", letterSpacing: 0.5 },
+  pointsRowWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: space.md,
+    paddingHorizontal: 4,
+  },
   pointsRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginTop: space.md,
-    paddingHorizontal: 4,
   },
   pointsText: { color: colors.accent, fontSize: 13, fontWeight: "600" },
+  buyPtsBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: colors.accent,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 2,
+  },
+  buyPtsBtnText: { color: colors.textInverse, fontSize: 12, fontWeight: "700" },
 });

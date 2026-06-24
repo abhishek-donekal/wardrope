@@ -16,18 +16,28 @@ import { useRouter, Link } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import * as AppleAuthentication from "expo-apple-authentication";
 
 import { useAuth } from "@/src/contexts/AuthContext";
+import { useResponsive } from "@/src/hooks/use-responsive";
 import { colors, type, space } from "@/src/theme";
 
 export default function Login() {
-  const { login, loginWithGoogle, enterDemoMode, googleAuthError, clearGoogleAuthError } = useAuth();
+  const { login, loginWithGoogle, loginWithApple, enterDemoMode, googleAuthError, clearGoogleAuthError } = useAuth();
   const router = useRouter();
+  const { isTablet } = useResponsive();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [appleAvailable, setAppleAvailable] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS === "ios") {
+      AppleAuthentication.isAvailableAsync().then(setAppleAvailable).catch(() => setAppleAvailable(false));
+    }
+  }, []);
 
   useEffect(() => {
     if (googleAuthError) {
@@ -69,6 +79,21 @@ export default function Login() {
     }
   };
 
+  const apple = async () => {
+    setErr(null);
+    setBusy(true);
+    try {
+      await loginWithApple();
+      router.replace("/");
+    } catch (e: any) {
+      if (e?.message && !e.message.toLowerCase().includes("cancel")) {
+        Alert.alert("Sign in with Apple", e.message);
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <View style={styles.root} testID="login-screen">
       <ImageBackground
@@ -93,7 +118,7 @@ export default function Login() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.sheet}
       >
-        <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={[styles.form, isTablet && styles.formTablet]} keyboardShouldPersistTaps="handled">
           <Text style={[type.h3, { marginBottom: space.lg }]}>Sign in</Text>
 
           {err ? (
@@ -147,11 +172,28 @@ export default function Login() {
             )}
           </TouchableOpacity>
 
+          <Link href="/auth/forgot-password" asChild>
+            <TouchableOpacity style={styles.forgotBtn} testID="login-forgot-password">
+              <Text style={styles.forgotText}>Forgot password?</Text>
+            </TouchableOpacity>
+          </Link>
+
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>or</Text>
             <View style={styles.dividerLine} />
           </View>
+
+          {appleAvailable && Platform.OS === "ios" ? (
+            <AppleAuthentication.AppleAuthenticationButton
+              testID="login-apple-btn"
+              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+              cornerRadius={2}
+              style={styles.appleBtn}
+              onPress={apple}
+            />
+          ) : null}
 
           <TouchableOpacity testID="login-google-btn" style={styles.googleBtn} onPress={google} disabled={busy}>
             <Ionicons name="logo-google" size={18} color={colors.text} />
@@ -189,6 +231,7 @@ const styles = StyleSheet.create({
   heroInner: { paddingHorizontal: space.lg, paddingBottom: space.lg },
   sheet: { flex: 1 },
   form: { paddingHorizontal: space.lg, paddingTop: space.lg, paddingBottom: space.xxl },
+  formTablet: { width: "100%", maxWidth: 480, alignSelf: "center" },
   label: { ...type.overline, fontSize: 11, marginBottom: 6 },
   input: {
     color: colors.text,
@@ -209,6 +252,11 @@ const styles = StyleSheet.create({
   divider: { flexDirection: "row", alignItems: "center", marginVertical: space.lg },
   dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
   dividerText: { ...type.overline, marginHorizontal: 12 },
+  appleBtn: {
+    width: "100%",
+    height: 48,
+    marginBottom: space.md,
+  },
   googleBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -230,6 +278,8 @@ const styles = StyleSheet.create({
   },
   demoBtnText: { color: colors.accent, fontWeight: "600", fontSize: 15 },
   demoBtnSub: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
+  forgotBtn: { alignSelf: "flex-end", marginTop: space.sm },
+  forgotText: { color: colors.textSecondary, fontSize: 13 },
   footer: { flexDirection: "row", justifyContent: "center", marginTop: space.lg },
   passwordRow: {
     flexDirection: "row",

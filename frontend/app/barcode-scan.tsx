@@ -107,7 +107,7 @@ export default function BarcodeScanner() {
             Camera access is required to scan barcodes.
           </Text>
           <TouchableOpacity style={styles.primaryBtn} onPress={requestPermission}>
-            <Text style={styles.primaryBtnText}>Grant Camera Access</Text>
+            <Text style={styles.primaryBtnText}>Continue</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>

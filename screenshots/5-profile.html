@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1242">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { width:1242px; height:2688px; background:#050505; font-family:-apple-system,sans-serif; overflow:hidden; position:relative; }
+  .status { display:flex; justify-content:space-between; align-items:center; padding:18px 48px 0; }
+  .time { color:#fff; font-size:36px; font-weight:600; }
+  .icons { color:#fff; font-size:28px; }
+  .header { padding:48px 48px 40px; }
+  .overline { color:#A3A3A3; font-size:24px; letter-spacing:3px; text-transform:uppercase; margin-bottom:10px; }
+  .h2 { color:#fff; font-family:Georgia,serif; font-size:72px; letter-spacing:-2px; }
+  .avatar-section { margin:0 48px 40px; display:flex; align-items:center; gap:40px; background:#121212; border:2px solid #2A2A2A; padding:40px; }
+  .avatar { width:120px; height:120px; border-radius:50%; background:rgba(197,160,89,0.15); border:3px solid #C5A059; display:flex; align-items:center; justify-content:center; font-size:52px; font-family:Georgia,serif; color:#C5A059; font-weight:600; flex-shrink:0; }
+  .avatar-info { }
+  .avatar-name { color:#fff; font-family:Georgia,serif; font-size:48px; margin-bottom:10px; }
+  .avatar-email { color:#A3A3A3; font-size:26px; }
+  .stats-row { margin:0 48px 32px; display:flex; gap:20px; }
+  .stat { flex:1; background:#121212; border:2px solid #2A2A2A; padding:32px; text-align:center; }
+  .stat-num { color:#C5A059; font-family:Georgia,serif; font-size:56px; font-weight:600; margin-bottom:8px; }
+  .stat-label { color:#A3A3A3; font-size:22px; letter-spacing:1px; text-transform:uppercase; }
+  .section { margin:0 48px 28px; background:#121212; border:2px solid #2A2A2A; }
+  .row { display:flex; justify-content:space-between; align-items:center; padding:36px 36px; border-bottom:1px solid #2A2A2A; }
+  .row:last-child { border-bottom:none; }
+  .row-label { color:#A3A3A3; font-size:26px; letter-spacing:1.5px; text-transform:uppercase; }
+  .row-value { color:#fff; font-size:28px; }
+  .row-value.accent { color:#C5A059; }
+  .row-arrow { color:#A3A3A3; font-size:36px; }
+  .tab-bar { position:absolute; bottom:0; left:0; right:0; height:180px; background:#050505; border-top:1px solid #2A2A2A; display:flex; align-items:flex-start; justify-content:space-around; padding-top:24px; }
+  .tab { display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .tab-icon { font-size:44px; }
+  .tab-label { font-size:20px; color:#A3A3A3; }
+</style>
+</head>
+<body>
+  <div class="status"><span class="time">9:41</span><span class="icons"><svg style="display:inline-block;vertical-align:middle;margin:0 6px" width="56" height="32" viewBox="0 0 56 32" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="22" width="7" height="10" rx="1.5" fill="white"/><rect x="11" y="16" width="7" height="16" rx="1.5" fill="white"/><rect x="22" y="10" width="7" height="22" rx="1.5" fill="white"/><rect x="33" y="4" width="7" height="28" rx="1.5" fill="white"/></svg><svg style="display:inline-block;vertical-align:middle;margin:0 6px" width="44" height="32" viewBox="0 0 44 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><path d="M4 16 Q22 2 40 16"/><path d="M10 22 Q22 12 34 22"/><circle cx="22" cy="26" r="2" fill="white" stroke="none"/></svg><svg style="display:inline-block;vertical-align:middle;margin:0 6px" width="60" height="32" viewBox="0 0 60 32" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="8" width="48" height="20" rx="5" fill="none" stroke="white" stroke-width="2.5"/><rect x="50" y="14" width="4" height="8" rx="1.5" fill="white"/><rect x="6" y="12" width="36" height="12" rx="2.5" fill="white"/></svg></span></div>
+  <div class="header">
+    <div class="overline">Account</div>
+    <div class="h2">Profile</div>
+  </div>
+  <div class="avatar-section">
+    <div class="avatar">A</div>
+    <div class="avatar-info">
+      <div class="avatar-name">Abhishek</div>
+      <div class="avatar-email">adonekal@gmail.com</div>
+    </div>
+  </div>
+  <div class="stats-row">
+    <div class="stat">
+      <div class="stat-num">24</div>
+      <div class="stat-label">Pieces</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">7</div>
+      <div class="stat-label">Looks</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">340</div>
+      <div class="stat-label">Points</div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="row">
+      <span class="row-label">Plan</span>
+      <span class="row-value accent">Pro</span>
+    </div>
+    <div class="row">
+      <span class="row-label">Theme</span>
+      <span class="row-value">Editorial</span>
+    </div>
+    <div class="row">
+      <span class="row-label">Referral code</span>
+      <span class="row-value accent">AB3X9KTZ</span>
+    </div>
+  </div>
+  <div class="section">
+    <div class="row">
+      <span class="row-label">Privacy Policy</span>
+      <span class="row-arrow">›</span>
+    </div>
+    <div class="row">
+      <span class="row-label">Terms of Use</span>
+      <span class="row-arrow">›</span>
+    </div>
+    <div class="row">
+      <span class="row-label">Send Feedback</span>
+      <span class="row-arrow">›</span>
+    </div>
+  </div>
+  <div class="section">
+    <div class="row">
+      <span class="row-label" style="color:#722F37;">Sign out</span>
+      <span class="row-arrow">›</span>
+    </div>
+  </div>
+  <div class="tab-bar">
+    <div class="tab"><div class="tab-icon">🧥</div><div class="tab-label">Closet</div></div>
+    <div class="tab"><div class="tab-icon">✨</div><div class="tab-label">Looks</div></div>
+    <div class="tab"><div class="tab-icon">🪄</div><div class="tab-label">Stylist</div></div>
+    <div class="tab"><div class="tab-icon">🛍</div><div class="tab-label">Shop</div></div>
+    <div class="tab"><div class="tab-icon">👤</div><div class="tab-label" style="color:#C5A059;">Profile</div></div>
+  </div>
+</body>
+</html>

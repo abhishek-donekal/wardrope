@@ -60,6 +60,14 @@ chainlit.md
 
 # Deployment
 .vercel
+**/.vercel
+
+# Expo / Metro caches
+.metro-cache/
+**/.metro-cache/
+.expo/
+**/.expo/
+*.log
 
 # Data and databases
 agenthub/agents/youtube/db

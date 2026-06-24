@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
 import { api } from "@/src/lib/api";
+import { useResponsive } from "@/src/hooks/use-responsive";
 import { colors, type, space } from "@/src/theme";
 
 type Outfit = {
@@ -29,6 +30,7 @@ type Item = {
   item_id: string;
   name: string;
   image_base64: string;
+  image_url?: string;
   tags: any;
 };
 
@@ -45,6 +47,7 @@ const PROMPTS = [
 
 export default function Stylist() {
   const router = useRouter();
+  const { isTablet } = useResponsive();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "intro",
@@ -92,9 +95,15 @@ export default function Stylist() {
       };
       setMessages((m) => [...m, assistant]);
     } catch (e: any) {
+      const errMsg = e?.message || "";
+      const friendlyMsg = errMsg.includes("429") || errMsg.toLowerCase().includes("rate")
+        ? "You've been styling a lot! Give me a moment — try again in a minute."
+        : errMsg.includes("closet") || errMsg.includes("empty")
+        ? "Your closet is empty. Add some items first and I'll style them for you."
+        : "The stylist is taking a short break. Please try again in a moment.";
       setMessages((m) => [
         ...m,
-        { id: `a-${Date.now()}`, role: "assistant", text: e?.message || "Stylist unavailable.", outfits: [] },
+        { id: `a-${Date.now()}`, role: "assistant", text: friendlyMsg, outfits: [] },
       ]);
     } finally {
       setBusy(false);
@@ -126,7 +135,7 @@ export default function Stylist() {
       <ScrollView
         ref={scrollRef}
         style={{ flex: 1 }}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, isTablet && styles.scrollContentTablet]}
         showsVerticalScrollIndicator={false}
       >
         {messages.map((m) => (
@@ -184,7 +193,7 @@ export default function Stylist() {
         ) : null}
       </ScrollView>
 
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={88}>
+      <KeyboardAvoidingView behavior={Platform.OS === "android" ? undefined : "padding"} keyboardVerticalOffset={88}>
         <View style={styles.inputRow}>
           <TextInput
             testID="stylist-input"
@@ -228,10 +237,10 @@ function OutfitCard({
         {pieces.slice(0, 4).map((p, idx) => (
           <Image
             key={p.item_id}
-            source={{ uri: `data:image/jpeg;base64,${p.image_base64}` }}
+            source={{ uri: (p as any).image_url || (p.image_base64 ? `data:image/jpeg;base64,${p.image_base64}` : undefined) }}
             style={[
               styles.outfitThumb,
-              { left: (idx % 2) * 90, top: Math.floor(idx / 2) * 90 },
+              { left: (idx % 2) * 92, top: Math.floor(idx / 2) * 92 },
             ]}
           />
         ))}
@@ -263,6 +272,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   header: { paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.md },
   scrollContent: { paddingHorizontal: space.lg, paddingBottom: 140 },
+  scrollContentTablet: { width: "100%", maxWidth: 760, alignSelf: "center" },
   userBubble: {
     alignSelf: "flex-end",
     backgroundColor: colors.accent,
@@ -315,7 +325,7 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   outfitImages: {
-    width: 196, height: 180, position: "relative", marginBottom: 10, backgroundColor: colors.bgTertiary,
+    width: 196, height: 196, position: "relative", marginBottom: 10, backgroundColor: colors.bgTertiary,
   },
   outfitThumb: { width: 88, height: 88, position: "absolute", margin: 4 },
   outfitEmpty: { flex: 1, alignItems: "center", justifyContent: "center" },

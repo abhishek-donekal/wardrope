@@ -1,22 +1,41 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "Wardrobe",
+    "slug": "wardrope",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
-    "userInterfaceStyle": "automatic",
+    "scheme": "wardrope",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.wardrope.app",
+      "buildNumber": "9",
+      "usesAppleSignIn": true,
+      "requireFullScreen": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Wardrobe uses your camera to photograph clothing items so they can be catalogued and AI-tagged in your digital wardrobe.",
+        "NSPhotoLibraryUsageDescription": "Wardrobe accesses your photo library so you can pick existing photos of clothing items to add to your wardrobe.",
+        "NSPhotoLibraryAddUsageDescription": "Wardrobe may save processed clothing images to your photo library.",
+        "NSMicrophoneUsageDescription": "Microphone access is not used by Wardrobe but is required by the camera framework.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000"
+        "backgroundColor": "#000000"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.wardrope.app",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -33,10 +52,33 @@
           "resizeMode": "contain",
           "backgroundColor": "#000"
         }
-      ]
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Wardrobe accesses your photos to add clothing items to your wardrobe.",
+          "cameraPermission": "Wardrobe uses the camera to photograph your clothing items."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Wardrobe uses the camera to photograph your clothing items.",
+          "microphonePermission": false
+        }
+      ],
+      "expo-font",
+      "expo-iap"
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "4a8a53a1-65df-49fd-a352-c310e0968130"
+      }
+    },
+    "owner": "duryo"
   }
 }

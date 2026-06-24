@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
 import { api } from "@/src/lib/api";
+import { useResponsive } from "@/src/hooks/use-responsive";
 import { colors, type, space } from "@/src/theme";
 
 type Lookbook = {
@@ -45,6 +46,7 @@ type Item = {
 
 export default function Looks() {
   const router = useRouter();
+  const { isTablet, sidePad } = useResponsive();
   const [tab, setTab] = useState<"trends" | "saved">("trends");
   const [lookbooks, setLookbooks] = useState<Lookbook[]>([]);
   const [outfits, setOutfits] = useState<Outfit[]>([]);
@@ -112,7 +114,7 @@ export default function Looks() {
           <ActivityIndicator color={colors.accent} />
         </View>
       ) : tab === "trends" ? (
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.scroll, isTablet && { paddingHorizontal: space.lg + sidePad }]} showsVerticalScrollIndicator={false}>
           {lookbooks.map((lb) => (
             <TouchableOpacity
               key={lb.lookbook_id}
@@ -141,7 +143,7 @@ export default function Looks() {
           ))}
         </ScrollView>
       ) : (
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.scroll, isTablet && { paddingHorizontal: space.lg + sidePad }]} showsVerticalScrollIndicator={false}>
           {outfits.length === 0 ? (
             <View style={styles.savedEmpty}>
               <Text style={type.overline}>Nothing saved yet</Text>
@@ -206,7 +208,7 @@ const styles = StyleSheet.create({
   tabTextActive: { color: colors.accent, fontWeight: "600" },
   loading: { flex: 1, alignItems: "center", justifyContent: "center" },
   scroll: { padding: space.lg, paddingBottom: 140, gap: 16 },
-  lookCard: { borderWidth: 1, borderColor: colors.border, marginBottom: 4 },
+  lookCard: { borderWidth: 1, borderColor: colors.border, marginBottom: 4, alignSelf: "stretch" },
   lookImage: { width: "100%", aspectRatio: 0.72, justifyContent: "flex-end" },
   lookImageInner: {},
   lookOverlay: { padding: space.lg, paddingBottom: space.xl },

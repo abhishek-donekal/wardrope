@@ -1,0 +1,5 @@
+node_modules
+.metro-cache
+.expo
+dist
+*.log

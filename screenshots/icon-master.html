@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:1024px; height:1024px; }
+  body { background:#050505; display:flex; align-items:center; justify-content:center; }
+
+  .frame {
+    width:1024px;
+    height:1024px;
+    position:relative;
+    background:
+      radial-gradient(circle at 50% 35%, #1A1410 0%, #0A0807 55%, #050505 100%);
+    overflow:hidden;
+  }
+
+  /* Subtle gold vignette ring */
+  .ring {
+    position:absolute;
+    inset:80px;
+    border:2px solid rgba(197,160,89,0.18);
+    border-radius:24px;
+  }
+
+  /* Hanger arc above the W */
+  .hanger {
+    position:absolute;
+    top:200px;
+    left:50%;
+    transform:translateX(-50%);
+    width:340px;
+    height:140px;
+  }
+  .hanger svg { width:100%; height:100%; }
+
+  /* The W mark */
+  .mark {
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform:translate(-50%, -42%);
+    color:#C5A059;
+    font-family: "Didot", "Bodoni 72", "Bodoni MT", "Playfair Display", Georgia, serif;
+    font-size:620px;
+    font-weight:400;
+    letter-spacing:-30px;
+    line-height:1;
+    /* very subtle inner glow */
+    text-shadow:
+      0 0 60px rgba(197,160,89,0.25),
+      0 4px 0 rgba(0,0,0,0.4);
+  }
+
+  /* Wordmark below */
+  .wordmark {
+    position:absolute;
+    bottom:160px;
+    left:0;
+    right:0;
+    text-align:center;
+    color:#C5A059;
+    font-family:-apple-system, Helvetica, Arial, sans-serif;
+    font-size:42px;
+    font-weight:700;
+    letter-spacing:18px;
+    text-transform:uppercase;
+    opacity:0.85;
+  }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <div class="ring"></div>
+
+    <div class="hanger">
+      <svg viewBox="0 0 340 140" xmlns="http://www.w3.org/2000/svg">
+        <!-- Hanger hook -->
+        <path d="M 170 10
+                 Q 170 38, 195 38
+                 Q 215 38, 215 22"
+              fill="none" stroke="#C5A059" stroke-width="6" stroke-linecap="round"/>
+        <!-- Hanger triangle bar -->
+        <path d="M 170 38 L 40 120 L 300 120 Z"
+              fill="none" stroke="#C5A059" stroke-width="6" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <div class="mark">W</div>
+
+    <div class="wordmark">WARDROPE</div>
+  </div>
+</body>
+</html>

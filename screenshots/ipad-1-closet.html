@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { width:2048px; height:2732px; background:#050505; font-family:-apple-system,sans-serif; overflow:hidden; position:relative; }
+  .status { display:flex; justify-content:space-between; align-items:center; padding:24px 64px 0; }
+  .time { color:#fff; font-size:42px; font-weight:600; }
+  .icons { color:#fff; font-size:32px; }
+  .sidebar { position:absolute; top:0; left:0; width:320px; height:100%; background:#121212; border-right:2px solid #2A2A2A; display:flex; flex-direction:column; padding:80px 0 40px; }
+  .sidebar-logo { padding:0 32px 48px; }
+  .sidebar-logo h1 { color:#C5A059; font-family:Georgia,serif; font-size:48px; }
+  .sidebar-logo p { color:#A3A3A3; font-size:22px; letter-spacing:2px; text-transform:uppercase; margin-top:8px; }
+  .nav-item { display:flex; align-items:center; gap:20px; padding:22px 32px; font-size:30px; color:#A3A3A3; }
+  .nav-item.active { background:rgba(197,160,89,0.12); color:#C5A059; border-left:3px solid #C5A059; }
+  .nav-icon { font-size:36px; }
+  .main { margin-left:320px; padding:48px 64px 120px; }
+  .header { display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:48px; }
+  .overline { color:#A3A3A3; font-size:28px; letter-spacing:3px; text-transform:uppercase; margin-bottom:12px; }
+  .h2 { color:#fff; font-family:Georgia,serif; font-size:88px; letter-spacing:-2px; }
+  .add-btn { width:100px; height:100px; background:#C5A059; border-radius:4px; display:flex; align-items:center; justify-content:center; }
+  .add-btn span { color:#000; font-size:64px; font-weight:300; }
+  .filter-row { display:flex; gap:18px; margin-bottom:48px; flex-wrap:wrap; }
+  .chip { padding:18px 32px; border:2px solid #2A2A2A; border-radius:4px; }
+  .chip.active { border-color:#C5A059; background:rgba(197,160,89,0.12); }
+  .chip span { font-size:28px; color:#A3A3A3; letter-spacing:1px; }
+  .chip.active span { color:#C5A059; font-weight:600; }
+  .grid { display:grid; grid-template-columns:repeat(4,1fr); gap:28px; }
+  .card { border:2px solid #2A2A2A; background:#121212; }
+  .card-img { width:100%; aspect-ratio:0.85; background:#1A1A1A; display:flex; align-items:center; justify-content:center; font-size:100px; }
+  .card-info { padding:28px; }
+  .card-name { color:#fff; font-size:32px; font-weight:600; margin-bottom:10px; }
+  .card-sub { color:#A3A3A3; font-size:26px; text-transform:capitalize; }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <h1>Wardrobe</h1>
+      <p>Digital Wardrobe</p>
+    </div>
+    <div class="nav-item active"><span class="nav-icon">🧥</span> Closet</div>
+    <div class="nav-item"><span class="nav-icon">✨</span> Looks</div>
+    <div class="nav-item"><span class="nav-icon">🪄</span> Stylist</div>
+    <div class="nav-item"><span class="nav-icon">🛍</span> Shop</div>
+    <div class="nav-item"><span class="nav-icon">👤</span> Profile</div>
+  </div>
+  <div class="main">
+    <div class="status" style="margin-left:-64px;padding-left:64px;margin-bottom:32px;"><span class="time">9:41</span><span class="icons"><svg style="display:inline-block;vertical-align:middle;margin:0 6px" width="56" height="32" viewBox="0 0 56 32" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="22" width="7" height="10" rx="1.5" fill="white"/><rect x="11" y="16" width="7" height="16" rx="1.5" fill="white"/><rect x="22" y="10" width="7" height="22" rx="1.5" fill="white"/><rect x="33" y="4" width="7" height="28" rx="1.5" fill="white"/></svg><svg style="display:inline-block;vertical-align:middle;margin:0 6px" width="44" height="32" viewBox="0 0 44 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><path d="M4 16 Q22 2 40 16"/><path d="M10 22 Q22 12 34 22"/><circle cx="22" cy="26" r="2" fill="white" stroke="none"/></svg><svg style="display:inline-block;vertical-align:middle;margin:0 6px" width="60" height="32" viewBox="0 0 60 32" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="8" width="48" height="20" rx="5" fill="none" stroke="white" stroke-width="2.5"/><rect x="50" y="14" width="4" height="8" rx="1.5" fill="white"/><rect x="6" y="12" width="36" height="12" rx="2.5" fill="white"/></svg></span></div>
+    <div class="header">
+      <div><div class="overline">Your wardrobe</div><div class="h2">24 pieces</div></div>
+      <div class="add-btn"><span>+</span></div>
+    </div>
+    <div class="filter-row">
+      <div class="chip active"><span>All</span></div>
+      <div class="chip"><span>Tops</span></div>
+      <div class="chip"><span>Bottoms</span></div>
+      <div class="chip"><span>Dresses</span></div>
+      <div class="chip"><span>Outerwear</span></div>
+      <div class="chip"><span>Shoes</span></div>
+      <div class="chip"><span>Accessories</span></div>
+    </div>
+    <div class="grid">
+      <div class="card"><div class="card-img">👔</div><div class="card-info"><div class="card-name">White Oxford Shirt</div><div class="card-sub">White · Tops</div></div></div>
+      <div class="card"><div class="card-img">👖</div><div class="card-info"><div class="card-name">Navy Slim Chinos</div><div class="card-sub">Navy · Bottoms</div></div></div>
+      <div class="card"><div class="card-img">🧥</div><div class="card-info"><div class="card-name">Camel Blazer</div><div class="card-sub">Camel · Outerwear</div></div></div>
+      <div class="card"><div class="card-img">👟</div><div class="card-info"><div class="card-name">White Sneakers</div><div class="card-sub">White · Shoes</div></div></div>
+      <div class="card"><div class="card-img">👗</div><div class="card-info"><div class="card-name">Emerald Midi Dress</div><div class="card-sub">Green · Dresses</div></div></div>
+      <div class="card"><div class="card-img">👜</div><div class="card-info"><div class="card-name">Rose Leather Bag</div><div class="card-sub">Pink · Accessories</div></div></div>
+      <div class="card"><div class="card-img">🧣</div><div class="card-info"><div class="card-name">Wool Scarf</div><div class="card-sub">Grey · Accessories</div></div></div>
+      <div class="card"><div class="card-img">👞</div><div class="card-info"><div class="card-name">Brown Loafers</div><div class="card-sub">Brown · Shoes</div></div></div>
+    </div>
+  </div>
+</body>
+</html>

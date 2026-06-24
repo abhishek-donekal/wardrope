@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { width:2048px; height:2732px; background:#050505; font-family:-apple-system,sans-serif; overflow:hidden; position:relative; }
+  .sidebar { position:absolute; top:0; left:0; width:320px; height:100%; background:#121212; border-right:2px solid #2A2A2A; display:flex; flex-direction:column; padding:80px 0 40px; }
+  .sidebar-logo { padding:0 32px 48px; }
+  .sidebar-logo h1 { color:#C5A059; font-family:Georgia,serif; font-size:48px; }
+  .sidebar-logo p { color:#A3A3A3; font-size:22px; letter-spacing:2px; text-transform:uppercase; margin-top:8px; }
+  .nav-item { display:flex; align-items:center; gap:20px; padding:22px 32px; font-size:30px; color:#A3A3A3; }
+  .nav-item.active { background:rgba(197,160,89,0.12); color:#C5A059; border-left:3px solid #C5A059; }
+  .nav-icon { font-size:36px; }
+  .main { margin-left:320px; display:flex; flex-direction:column; height:100%; }
+  .header { padding:48px 64px 32px; border-bottom:2px solid #2A2A2A; }
+  .overline { color:#A3A3A3; font-size:28px; letter-spacing:3px; text-transform:uppercase; margin-bottom:12px; }
+  .h2 { color:#fff; font-family:Georgia,serif; font-size:80px; letter-spacing:-2px; }
+  .messages { flex:1; padding:48px 64px; display:flex; flex-direction:column; gap:36px; overflow:hidden; }
+  .bubble { padding:32px 40px; font-size:32px; line-height:1.6; max-width:65%; }
+  .bubble.ai { background:#121212; border:2px solid #2A2A2A; border-radius:24px 24px 24px 4px; color:#fff; }
+  .bubble.user { background:#C5A059; border-radius:24px 24px 4px 24px; color:#000; font-weight:500; align-self:flex-end; }
+  .outfit-card { margin:0 64px; background:#121212; border:2px solid #2A2A2A; padding:40px; }
+  .outfit-label { color:#A3A3A3; font-size:24px; letter-spacing:2px; text-transform:uppercase; margin-bottom:16px; }
+  .outfit-title { color:#fff; font-family:Georgia,serif; font-size:48px; margin-bottom:32px; }
+  .outfit-items { display:flex; gap:24px; }
+  .outfit-item { flex:1; background:#1A1A1A; aspect-ratio:0.85; display:flex; align-items:center; justify-content:center; font-size:80px; border:1px solid #333; }
+  .input-bar { padding:32px 64px 48px; display:flex; gap:24px; border-top:2px solid #2A2A2A; }
+  .input-box { flex:1; background:#121212; border:2px solid #333; padding:32px 40px; font-size:32px; color:#A3A3A3; border-radius:4px; }
+  .send-btn { background:#C5A059; color:#000; border:none; padding:32px 56px; font-size:32px; font-weight:700; border-radius:4px; }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="sidebar-logo"><h1>Wardrobe</h1><p>Digital Wardrobe</p></div>
+    <div class="nav-item"><span class="nav-icon">🧥</span> Closet</div>
+    <div class="nav-item"><span class="nav-icon">✨</span> Looks</div>
+    <div class="nav-item active"><span class="nav-icon">🪄</span> Stylist</div>
+    <div class="nav-item"><span class="nav-icon">🛍</span> Shop</div>
+    <div class="nav-item"><span class="nav-icon">👤</span> Profile</div>
+  </div>
+  <div class="main">
+    <div class="header"><div class="overline">AI Stylist</div><div class="h2">Your personal stylist</div></div>
+    <div class="messages">
+      <div class="bubble ai">Hi! I'm your AI stylist. Tell me about an occasion, your mood, or what you're looking for — I'll build a complete outfit from your wardrobe.</div>
+      <div class="bubble user">I have a dinner date tonight, smart casual</div>
+      <div class="bubble ai">Perfect for a dinner date! Here's what I'd pull from your closet — effortlessly smart without trying too hard:</div>
+    </div>
+    <div class="outfit-card">
+      <div class="outfit-label">Tonight's look</div>
+      <div class="outfit-title">Smart Casual Dinner</div>
+      <div class="outfit-items">
+        <div class="outfit-item">👔</div>
+        <div class="outfit-item">👖</div>
+        <div class="outfit-item">🧥</div>
+        <div class="outfit-item">👟</div>
+      </div>
+    </div>
+    <div class="input-bar">
+      <div class="input-box">What are you dressing for today?</div>
+      <div class="send-btn">Send</div>
+    </div>
+  </div>
+</body>
+</html>

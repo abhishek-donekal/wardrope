@@ -10,6 +10,7 @@ import {
   RefreshControl,
   Alert,
   Platform,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -33,6 +34,7 @@ type ListingItem = {
 
 export default function Listings() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
   const { user, setUser } = useAuth();
   const [tab, setTab] = useState<"mine" | "community">("mine");
   const [mine, setMine] = useState<ListingItem[]>([]);
@@ -176,7 +178,8 @@ export default function Listings() {
         <FlatList
           data={data}
           keyExtractor={(it) => it.item_id}
-          numColumns={2}
+          numColumns={width > 768 ? 4 : width > 480 ? 3 : 2}
+          key={width > 768 ? "4" : width > 480 ? "3" : "2"}
           contentContainerStyle={styles.grid}
           columnWrapperStyle={{ gap: 12 }}
           ItemSeparatorComponent={() => <View style={{ height: 12 }} />}

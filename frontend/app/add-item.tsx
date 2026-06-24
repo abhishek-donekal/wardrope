@@ -17,6 +17,8 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 
 import { api, uploadImageToS3 } from "@/src/lib/api";
+import { useAuth } from "@/src/contexts/AuthContext";
+import { useResponsive } from "@/src/hooks/use-responsive";
 import { colors, type, space } from "@/src/theme";
 
 
@@ -34,6 +36,8 @@ type Tags = {
 
 export default function AddItem() {
   const router = useRouter();
+  const { user } = useAuth();
+  const { isTablet } = useResponsive();
   const params = useLocalSearchParams<{ prefill_name?: string; prefill_brand?: string; closet_id?: string }>();
   const [pickedUri, setPickedUri] = useState<string | null>(null);
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
@@ -43,7 +47,10 @@ export default function AddItem() {
   const [brand, setBrand] = useState(params.prefill_brand || "");
   const [priceInput, setPriceInput] = useState("");
   const [purchaseDateInput, setPurchaseDateInput] = useState("");
+  const [personTag, setPersonTag] = useState("");
   const [busy, setBusy] = useState<"idle" | "picking" | "uploading" | "tagging" | "saving">("idle");
+
+  const isMultiPersonPlan = user?.plan_type === "couples" || user?.plan_type === "family";
 
   const ensureCameraPerm = async (): Promise<boolean> => {
     const cur = await ImagePicker.getCameraPermissionsAsync();
@@ -193,6 +200,7 @@ export default function AddItem() {
           ...(parsedPrice != null && !isNaN(parsedPrice) ? { price: parsedPrice } : {}),
           ...(purchaseDateInput.trim() ? { purchased_at: purchaseDateInput.trim() } : {}),
           ...(params.closet_id ? { closet_id: params.closet_id } : {}),
+          ...(personTag.trim() ? { person_tag: personTag.trim() } : {}),
         },
       });
       router.back();
@@ -213,13 +221,35 @@ export default function AddItem() {
         <View style={{ width: 26 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={[styles.scroll, isTablet && styles.scrollTablet]}>
         {!pickedUri ? (
           <View style={styles.choose}>
             <Text style={[type.h2, { marginBottom: space.md }]}>Show us the piece</Text>
             <Text style={[type.bodySm, { marginBottom: space.xl }]}>
               Snap a photo against a clean background, or pick from your library.
             </Text>
+
+            {/* Prominent batch import button */}
+            <TouchableOpacity
+              testID="add-item-batch-btn"
+              style={styles.batchBtn}
+              onPress={() => router.push("/scan/camera-roll")}
+            >
+              <View style={styles.batchBtnIcon}>
+                <Ionicons name="layers-outline" size={30} color={colors.textInverse} />
+              </View>
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <Text style={styles.batchBtnTitle}>Add Multiple Items</Text>
+                <Text style={styles.batchBtnSub}>Import up to 10 at once from your camera roll</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textInverse} />
+            </TouchableOpacity>
+
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or add one item</Text>
+              <View style={styles.dividerLine} />
+            </View>
 
             <TouchableOpacity testID="add-item-camera-btn" style={styles.bigBtn} onPress={fromCamera}>
               <Ionicons name="camera-outline" size={28} color={colors.accent} />
@@ -323,6 +353,20 @@ export default function AddItem() {
                   style={styles.input}
                 />
 
+                {isMultiPersonPlan && (
+                  <>
+                    <Text style={styles.label}>Person (optional)</Text>
+                    <TextInput
+                      testID="add-item-person-tag-input"
+                      value={personTag}
+                      onChangeText={setPersonTag}
+                      placeholder="Whose item is this? e.g. Alex, Partner"
+                      placeholderTextColor={colors.textSecondary}
+                      style={styles.input}
+                    />
+                  </>
+                )}
+
                 <TouchableOpacity
                   testID="add-item-save-btn"
                   style={[styles.primaryBtn, (busy === "saving" || busy === "uploading" || busy === "tagging") && { opacity: 0.6 }]}
@@ -379,7 +423,34 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   scroll: { padding: space.lg, paddingBottom: space.xxl },
+  scrollTablet: { width: "100%", maxWidth: 720, alignSelf: "center" },
   choose: { paddingTop: space.lg },
+  batchBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: space.lg,
+    backgroundColor: colors.accent,
+    marginBottom: 12,
+  },
+  batchBtnIcon: {
+    width: 48,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.15)",
+    borderRadius: 2,
+  },
+  batchBtnTitle: { color: colors.textInverse, fontSize: 17, fontWeight: "700" },
+  batchBtnSub: { color: "rgba(0,0,0,0.65)", fontSize: 12, marginTop: 4 },
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+    marginTop: 4,
+    gap: 10,
+  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  dividerText: { color: colors.textSecondary, fontSize: 11, letterSpacing: 0.5 },
   bigBtn: {
     flexDirection: "row",
     alignItems: "center",

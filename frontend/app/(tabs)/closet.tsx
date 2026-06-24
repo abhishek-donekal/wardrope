@@ -12,6 +12,7 @@ import {
   ScrollView,
   TextInput,
   Modal,
+  useWindowDimensions,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -56,6 +57,7 @@ const DEFAULT_FILTERS = [
 
 export default function Closet() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
   useAuth(); // auth context required for API calls
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -283,7 +285,8 @@ export default function Closet() {
       ) : (
         <FlatList
           data={filtered}
-          numColumns={2}
+          numColumns={width > 768 ? 4 : width > 480 ? 3 : 2}
+          key={width > 768 ? "4" : width > 480 ? "3" : "2"}
           keyExtractor={(it) => it.item_id}
           contentContainerStyle={styles.gridContent}
           columnWrapperStyle={{ gap: 12 }}
@@ -438,7 +441,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: space.lg,
-    width: 300,
+    width: "85%",
+    maxWidth: 400,
     borderRadius: 4,
   },
   modalInput: {

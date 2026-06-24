@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1242">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { width:1242px; height:2688px; background:#050505; font-family:-apple-system,sans-serif; overflow:hidden; position:relative; }
+  .status { display:flex; justify-content:space-between; align-items:center; padding:18px 48px 0; }
+  .time { color:#fff; font-size:36px; font-weight:600; letter-spacing:-0.5px; }
+  .icons { display:flex; gap:16px; align-items:center; color:#fff; font-size:28px; }
+  .top-bar { display:flex; align-items:center; justify-content:space-between; padding:32px 48px; border-bottom:1px solid #2A2A2A; }
+  .back { color:#fff; font-size:48px; line-height:1; }
+  .top-title { color:#fff; font-size:24px; letter-spacing:3px; text-transform:uppercase; }
+  .spacer { width:48px; }
+
+  .content { padding:48px; }
+  .balance { display:flex; align-items:center; gap:32px; background:#121212; border:1px solid #2A2A2A; padding:48px; }
+  .trophy { width:96px; height:96px; border-radius:8px; background:rgba(197,160,89,0.15); display:flex; align-items:center; justify-content:center; font-size:56px; }
+  .balance-label { color:#A3A3A3; font-size:24px; letter-spacing:1px; text-transform:uppercase; }
+  .balance-amount { color:#C5A059; font-size:80px; font-weight:800; margin-top:8px; line-height:1; }
+
+  .section-title { color:#A3A3A3; font-size:24px; letter-spacing:3px; text-transform:uppercase; margin:80px 0 32px; }
+
+  .pack { position:relative; display:flex; align-items:center; background:#121212; border:1px solid #2A2A2A; padding:48px; margin-bottom:32px; }
+  .pack.popular { border-color:#C5A059; }
+  .pack-badge { position:absolute; top:0; right:0; padding:12px 24px; background:#C5A059; color:#0A0A0A; font-size:20px; font-weight:800; letter-spacing:1px; text-transform:uppercase; }
+  .pack-badge.gold { background:#DEB76E; }
+  .pack-left { flex:1; }
+  .pack-points { color:#fff; font-size:96px; font-weight:800; line-height:1; letter-spacing:-2px; }
+  .pack-pts-label { color:#A3A3A3; font-size:24px; letter-spacing:3px; text-transform:uppercase; margin-top:-2px; }
+  .pack-right { display:flex; flex-direction:column; align-items:flex-end; gap:20px; }
+  .pack-label { color:#A3A3A3; font-size:26px; letter-spacing:2px; text-transform:uppercase; }
+  .pack-price-btn { background:#C5A059; padding:24px 48px; min-width:200px; text-align:center; }
+  .pack-price { color:#0A0A0A; font-size:44px; font-weight:800; }
+
+  .note { color:#A3A3A3; font-size:24px; line-height:1.5; text-align:center; padding:0 48px; margin-top:64px; }
+
+  .home-indicator { position:absolute; bottom:24px; left:50%; transform:translateX(-50%); width:280px; height:10px; background:#fff; border-radius:5px; }
+</style>
+</head>
+<body>
+  <div class="status">
+    <span class="time">9:41</span>
+    <div class="icons"><svg style="display:inline-block;vertical-align:middle;margin:0 6px" width="56" height="32" viewBox="0 0 56 32" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="22" width="7" height="10" rx="1.5" fill="white"/><rect x="11" y="16" width="7" height="16" rx="1.5" fill="white"/><rect x="22" y="10" width="7" height="22" rx="1.5" fill="white"/><rect x="33" y="4" width="7" height="28" rx="1.5" fill="white"/></svg><svg style="display:inline-block;vertical-align:middle;margin:0 6px" width="44" height="32" viewBox="0 0 44 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><path d="M4 16 Q22 2 40 16"/><path d="M10 22 Q22 12 34 22"/><circle cx="22" cy="26" r="2" fill="white" stroke="none"/></svg><svg style="display:inline-block;vertical-align:middle;margin:0 6px" width="60" height="32" viewBox="0 0 60 32" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="8" width="48" height="20" rx="5" fill="none" stroke="white" stroke-width="2.5"/><rect x="50" y="14" width="4" height="8" rx="1.5" fill="white"/><rect x="6" y="12" width="36" height="12" rx="2.5" fill="white"/></svg></div>
+  </div>
+
+  <div class="top-bar">
+    <span class="back">‹</span>
+    <span class="top-title">Buy Points</span>
+    <span class="spacer"></span>
+  </div>
+
+  <div class="content">
+    <div class="balance">
+      <div class="trophy">🏆</div>
+      <div>
+        <div class="balance-label">Current Balance</div>
+        <div class="balance-amount">230 pts</div>
+      </div>
+    </div>
+
+    <div class="section-title">Choose a Pack</div>
+
+    <div class="pack">
+      <div class="pack-left">
+        <div class="pack-points">500</div>
+        <div class="pack-pts-label">pts</div>
+      </div>
+      <div class="pack-right">
+        <div class="pack-label">Starter</div>
+        <div class="pack-price-btn"><span class="pack-price">$0.99</span></div>
+      </div>
+    </div>
+
+    <div class="pack popular">
+      <div class="pack-badge">Most Popular</div>
+      <div class="pack-left">
+        <div class="pack-points">1,200</div>
+        <div class="pack-pts-label">pts</div>
+      </div>
+      <div class="pack-right">
+        <div class="pack-label">Popular</div>
+        <div class="pack-price-btn"><span class="pack-price">$1.99</span></div>
+      </div>
+    </div>
+
+    <div class="pack">
+      <div class="pack-badge gold">Best Value</div>
+      <div class="pack-left">
+        <div class="pack-points">2,800</div>
+        <div class="pack-pts-label">pts</div>
+      </div>
+      <div class="pack-right">
+        <div class="pack-label">Best Value</div>
+        <div class="pack-price-btn"><span class="pack-price">$3.99</span></div>
+      </div>
+    </div>
+
+    <div class="note">
+      Points are used to claim items in the Swap Box and unlock premium AI features.
+      Purchases are processed securely through the App Store.
+    </div>
+  </div>
+
+  <div class="home-indicator"></div>
+</body>
+</html>

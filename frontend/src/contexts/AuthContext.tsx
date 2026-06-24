@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { Platform } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
+import * as AppleAuthentication from "expo-apple-authentication";
 
 import { api, setToken, clearToken, getToken, setDemoMode } from "@/src/lib/api";
 import { DEMO_USER } from "@/src/demo/mockData";
@@ -23,6 +24,7 @@ export type User = {
   phone_verified: boolean;
   points: number;
   stylist_persona: string;
+  theme_id: string;
   plan_type: string;
   plan_period: string;
   plan_addons: string[];
@@ -35,6 +37,7 @@ type AuthState = {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string, phone?: string, referralCode?: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
+  loginWithApple: () => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   setUser: (u: User) => void;
@@ -196,6 +199,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUserState(res.user);
   }, []);
 
+  const loginWithApple = useCallback(async () => {
+    if (Platform.OS !== "ios") {
+      throw new Error("Sign in with Apple is only available on iOS");
+    }
+    const available = await AppleAuthentication.isAvailableAsync();
+    if (!available) {
+      throw new Error("Sign in with Apple is not available on this device");
+    }
+    let credential;
+    try {
+      credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+    } catch (e: any) {
+      if (e?.code === "ERR_REQUEST_CANCELED") {
+        throw new Error("Apple sign-in cancelled");
+      }
+      throw e;
+    }
+    if (!credential.identityToken) {
+      throw new Error("Apple did not return an identity token");
+    }
+    const fullName = [credential.fullName?.givenName, credential.fullName?.familyName]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    const res = await api<{ token: string; user: User }>("/auth/apple", {
+      method: "POST",
+      body: {
+        identity_token: credential.identityToken,
+        full_name: fullName || undefined,
+        email: credential.email || undefined,
+      },
+      auth: false,
+    });
+    await setToken(res.token);
+    setUserState(res.user);
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await api("/auth/logout", { method: "POST" });
@@ -221,7 +266,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <Ctx.Provider
-      value={{ user, loading, login, register, loginWithGoogle, logout, refresh, setUser: setUserState, isDemoMode, enterDemoMode, exitDemoMode, googleAuthError, clearGoogleAuthError }}
+      value={{ user, loading, login, register, loginWithGoogle, loginWithApple, logout, refresh, setUser: setUserState, isDemoMode, enterDemoMode, exitDemoMode, googleAuthError, clearGoogleAuthError }}
     >
       {children}
     </Ctx.Provider>

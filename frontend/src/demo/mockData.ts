@@ -17,6 +17,7 @@ export const DEMO_USER: User = {
   phone_verified: false,
   points: 350,
   stylist_persona: "editor",
+  theme_id: "editorial",
   plan_type: "free",
   plan_period: "monthly",
   plan_addons: [],
