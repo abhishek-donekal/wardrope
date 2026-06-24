@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { width:1242px; height:2688px; background:#050505; font-family:-apple-system,"Segoe UI",sans-serif; overflow:hidden; position:relative; }
+  .status { display:flex; justify-content:space-between; align-items:center; padding:24px 48px 0; height:96px; }
+  .time { color:#fff; font-size:42px; font-weight:600; }
+  .topbar { display:flex; align-items:center; justify-content:space-between; padding:20px 48px 28px; border-bottom:1px solid #2A2A2A; }
+  .topbar .back { color:#fff; font-size:44px; }
+  .topbar .title { color:#fff; font-size:24px; letter-spacing:3px; text-transform:uppercase; }
+  .content { padding:48px; }
+  .h2 { color:#fff; font-family:Georgia,serif; font-size:64px; letter-spacing:-1px; margin-bottom:14px; }
+  .sub { color:#A3A3A3; font-size:30px; margin-bottom:44px; }
+  .toggle { display:flex; gap:16px; margin-bottom:44px; }
+  .tg { flex:1; padding:28px; text-align:center; border:1px solid #2A2A2A; border-radius:4px; background:#121212; position:relative; }
+  .tg.active { border-color:#C5A059; background:rgba(197,160,89,0.12); }
+  .tg span { font-size:32px; color:#A3A3A3; }
+  .tg.active span { color:#C5A059; font-weight:600; }
+  .badge { position:absolute; top:-18px; right:18px; background:#C5A059; color:#000; font-size:20px; font-weight:700; padding:6px 16px; border-radius:999px; }
+  .plan { border:1px solid #2A2A2A; background:#121212; padding:40px; margin-bottom:24px; border-radius:4px; }
+  .plan.active { border-color:#C5A059; }
+  .plan-head { display:flex; align-items:flex-start; }
+  .plan-name { font-size:40px; color:#fff; font-weight:600; }
+  .plan.active .plan-name { color:#C5A059; }
+  .plan-desc { font-size:26px; color:#A3A3A3; margin-top:8px; }
+  .plan-price { font-size:48px; color:#fff; font-weight:700; text-align:right; }
+  .plan.active .plan-price { color:#C5A059; }
+  .plan-suffix { font-size:26px; color:#A3A3A3; text-align:right; }
+  .check { width:44px; height:44px; border-radius:50%; border:2px solid #C5A059; margin-left:24px; display:flex; align-items:center; justify-content:center; color:#C5A059; font-size:30px; }
+  .radio { width:44px; height:44px; border-radius:50%; border:2px solid #3a3a3a; margin-left:24px; }
+  .feat { display:flex; align-items:center; gap:14px; margin-top:14px; }
+  .feat span { color:#A3A3A3; font-size:26px; }
+  .feat .dot { color:#C5A059; font-size:24px; }
+  .total { display:flex; justify-content:space-between; align-items:center; margin:40px 0 28px; }
+  .total .l { color:#A3A3A3; font-size:30px; letter-spacing:1px; text-transform:uppercase; }
+  .total .v { color:#fff; font-family:Georgia,serif; font-size:52px; }
+  .cta { background:#C5A059; color:#000; text-align:center; padding:34px; font-size:34px; font-weight:700; letter-spacing:1px; border-radius:4px; }
+  .disc { color:#A3A3A3; font-size:24px; text-align:center; margin-top:28px; line-height:1.5; }
+</style>
+</head>
+<body>
+  <div class="status">
+    <span class="time">9:41</span>
+    <span class="icons"><svg style="display:inline-block;vertical-align:middle;margin:0 6px" width="56" height="32" viewBox="0 0 56 32" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="22" width="7" height="10" rx="1.5" fill="white"/><rect x="11" y="16" width="7" height="16" rx="1.5" fill="white"/><rect x="22" y="10" width="7" height="22" rx="1.5" fill="white"/><rect x="33" y="4" width="7" height="28" rx="1.5" fill="white"/></svg><svg style="display:inline-block;vertical-align:middle;margin:0 6px" width="44" height="32" viewBox="0 0 44 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><path d="M4 16 Q22 2 40 16"/><path d="M10 22 Q22 12 34 22"/><circle cx="22" cy="26" r="2" fill="white" stroke="none"/></svg><svg style="display:inline-block;vertical-align:middle;margin:0 6px" width="60" height="32" viewBox="0 0 60 32" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="8" width="48" height="20" rx="5" fill="none" stroke="white" stroke-width="2.5"/><rect x="50" y="14" width="4" height="8" rx="1.5" fill="white"/><rect x="6" y="12" width="36" height="12" rx="2.5" fill="white"/></svg></span>
+  </div>
+  <div class="topbar">
+    <span class="back">‹</span>
+    <span class="title">Plan &amp; Billing</span>
+    <span style="width:44px"></span>
+  </div>
+  <div class="content">
+    <div class="h2">Choose your plan</div>
+    <div class="sub">Sign up for a year and get 3 months free.</div>
+
+    <div class="toggle">
+      <div class="tg active"><span>Monthly</span></div>
+      <div class="tg"><span>Annual</span><div class="badge">3 months free</div></div>
+    </div>
+
+    <div class="plan active">
+      <div class="plan-head">
+        <div style="flex:1">
+          <div class="plan-name">Single Closet</div>
+          <div class="plan-desc">Perfect for one person</div>
+        </div>
+        <div><div class="plan-price">$1.99</div><div class="plan-suffix">/mo</div></div>
+        <div class="check">✓</div>
+      </div>
+      <div class="feat"><span class="dot">✓</span><span>Unlimited items</span></div>
+      <div class="feat"><span class="dot">✓</span><span>AI tagging</span></div>
+      <div class="feat"><span class="dot">✓</span><span>Outfit builder · Lookbook</span></div>
+    </div>
+
+    <div class="plan">
+      <div class="plan-head">
+        <div style="flex:1">
+          <div class="plan-name">Couples Closet</div>
+          <div class="plan-desc">Two wardrobes, one app</div>
+        </div>
+        <div><div class="plan-price">$2.99</div><div class="plan-suffix">/mo</div></div>
+        <div class="radio"></div>
+      </div>
+    </div>
+
+    <div class="plan">
+      <div class="plan-head">
+        <div style="flex:1">
+          <div class="plan-name">Family Closet</div>
+          <div class="plan-desc">The whole household · up to 5 users</div>
+        </div>
+        <div><div class="plan-price">$4.99</div><div class="plan-suffix">/mo</div></div>
+        <div class="radio"></div>
+      </div>
+    </div>
+
+    <div class="total">
+      <span class="l">Total</span>
+      <span class="v">$1.99/mo</span>
+    </div>
+    <div class="cta">Continue to payment</div>
+    <div class="disc">Every $1 spent earns 50 points. Cancel anytime in Settings.</div>
+  </div>
+</body>
+</html>

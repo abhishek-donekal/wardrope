@@ -22,6 +22,7 @@ const targets = [
   { name: '4-add-item', w: 1242, h: 2688 },
   { name: '5-profile', w: 1242, h: 2688 },
   { name: 'iap-buy-points', w: 1242, h: 2688 },
+  { name: 'iap-subscription', w: 1242, h: 2688 },
   { name: 'ipad-1-closet', w: 2048, h: 2732 },
   { name: 'ipad-2-stylist', w: 2048, h: 2732 },
 ];
