@@ -8,6 +8,7 @@ import logging
 import re
 import json
 import uuid
+import base64
 import bcrypt
 import jwt
 import httpx
@@ -84,6 +85,7 @@ PLAN_AMOUNTS_CENTS: Dict[str, int] = {
 SQUARE_ACCESS_TOKEN = os.environ.get("SQUARE_ACCESS_TOKEN", "")
 SQUARE_ENVIRONMENT = os.environ.get("SQUARE_ENVIRONMENT", "sandbox")
 SQUARE_LOCATION_ID = os.environ.get("SQUARE_LOCATION_ID", "")
+SQUARE_APPLICATION_ID = os.environ.get("SQUARE_APPLICATION_ID", "")
 SQUARE_WEBHOOK_SIGNATURE_KEY = os.environ.get("SQUARE_WEBHOOK_SIGNATURE_KEY", "")
 SQUARE_WEBHOOK_URL = os.environ.get("SQUARE_WEBHOOK_URL", "")
 
@@ -249,6 +251,12 @@ class VerifyPhoneIn(BaseModel):
 
 class GoogleSessionIn(BaseModel):
     session_token: str  # token returned from Emergent google auth
+
+
+class AppleSessionIn(BaseModel):
+    identity_token: str  # JWT from Sign in with Apple
+    full_name: Optional[str] = None  # Only sent first sign-in
+    email: Optional[str] = None  # Fallback if not in token
 
 
 class ForgotPasswordIn(BaseModel):
@@ -777,6 +785,125 @@ async def auth_google_session(body: GoogleSessionIn):
     return {"token": session_token, "user": user_to_out(user).model_dump(), "login_reward": login_reward}
 
 
+# Apple JWKS cache (refreshed daily)
+_APPLE_KEYS_CACHE: Dict[str, Any] = {"keys": None, "fetched_at": 0.0}
+APPLE_ISSUER = "https://appleid.apple.com"
+APPLE_AUDIENCE = os.environ.get("APPLE_BUNDLE_ID", "com.wardrope.app")
+
+
+async def _fetch_apple_keys() -> Dict[str, Any]:
+    """Fetch Apple's JWKS, cached for 24h."""
+    now = time.time()
+    if _APPLE_KEYS_CACHE["keys"] and now - _APPLE_KEYS_CACHE["fetched_at"] < 86400:
+        return _APPLE_KEYS_CACHE["keys"]
+    async with httpx.AsyncClient(timeout=10.0) as cli:
+        r = await cli.get(f"{APPLE_ISSUER}/auth/keys")
+        r.raise_for_status()
+        data = r.json()
+    _APPLE_KEYS_CACHE["keys"] = data
+    _APPLE_KEYS_CACHE["fetched_at"] = now
+    return data
+
+
+async def _verify_apple_identity_token(token: str) -> Dict[str, Any]:
+    """Verify Apple identity token via JWKS. Returns claims on success."""
+    try:
+        unverified_header = jwt.get_unverified_header(token)
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid Apple token header: {e}")
+    kid = unverified_header.get("kid")
+    if not kid:
+        raise HTTPException(status_code=401, detail="Apple token missing kid")
+    keys_doc = await _fetch_apple_keys()
+    key_dict = next((k for k in keys_doc.get("keys", []) if k.get("kid") == kid), None)
+    if not key_dict:
+        # Force a refresh and retry once — Apple rotates keys
+        _APPLE_KEYS_CACHE["fetched_at"] = 0.0
+        keys_doc = await _fetch_apple_keys()
+        key_dict = next((k for k in keys_doc.get("keys", []) if k.get("kid") == kid), None)
+        if not key_dict:
+            raise HTTPException(status_code=401, detail="Apple signing key not found")
+    public_key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(key_dict))
+    try:
+        claims = jwt.decode(
+            token,
+            public_key,
+            algorithms=["RS256"],
+            audience=APPLE_AUDIENCE,
+            issuer=APPLE_ISSUER,
+        )
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Apple token expired")
+    except jwt.InvalidAudienceError:
+        raise HTTPException(status_code=401, detail="Apple token audience mismatch")
+    except jwt.InvalidIssuerError:
+        raise HTTPException(status_code=401, detail="Apple token issuer mismatch")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Apple token invalid: {e}")
+    return claims
+
+
+@api.post("/auth/apple")
+async def auth_apple(body: AppleSessionIn):
+    """Verify Apple identity token, upsert user, return JWT.
+
+    Sign in with Apple flow:
+      - Client (Expo expo-apple-authentication) gets identityToken from Apple.
+      - First sign-in also returns fullName + email; subsequent sign-ins only identityToken.
+      - Email may be private relay (xxx@privaterelay.appleid.com) — accept it.
+    """
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    claims = await _verify_apple_identity_token(body.identity_token)
+
+    apple_sub = claims.get("sub")  # Stable Apple user id (unique per app)
+    email = (claims.get("email") or body.email or "").lower().strip()
+    if not email:
+        # Fallback for relay-only users — synthesize an internal email keyed by sub
+        if not apple_sub:
+            raise HTTPException(status_code=400, detail="Apple did not return identifier")
+        email = f"{apple_sub}@apple.local"
+
+    # Find by apple_sub first (stable), then by email
+    user = None
+    if apple_sub:
+        user = await db.users.find_one({"apple_sub": apple_sub}, {"_id": 0})
+    if not user:
+        user = await db.users.find_one({"email": email}, {"_id": 0})
+
+    if not user:
+        user_id = new_id("user")
+        name = (body.full_name or "").strip() or email.split("@")[0]
+        await db.users.insert_one({
+            "user_id": user_id,
+            "email": email,
+            "name": name,
+            "auth_provider": "apple",
+            "apple_sub": apple_sub,
+            "email_verified": bool(claims.get("email_verified", True)),
+            "phone": None,
+            "phone_verified": False,
+            "onboarding_complete": False,
+            "style_preferences": [],
+            "fidelity_mode": "descriptive",
+            "created_at": utcnow(),
+        })
+        user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+        asyncio.create_task(send_welcome_email(email, name))
+    else:
+        # Backfill apple_sub for users who first signed up another way
+        if apple_sub and not user.get("apple_sub"):
+            await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"apple_sub": apple_sub}})
+
+    token = issue_jwt(user["user_id"])
+    try:
+        login_reward = await _check_login_reward(user["user_id"])
+    except Exception as e:
+        logger.error(f"login_reward failed for {user['user_id']}: {e}")
+        login_reward = {"rewarded": False}
+    return {"token": token, "user": user_to_out(user).model_dump(), "login_reward": login_reward}
+
+
 @api.get("/auth/me")
 async def auth_me(current=Depends(get_current_user)):
     return {"user": user_to_out(current).model_dump()}
@@ -895,6 +1022,30 @@ async def update_profile(body: ProfileUpdate, current=Depends(get_current_user))
         await award_points(current["user_id"], 50, "onboarding_complete")
     user = await db.users.find_one({"user_id": current["user_id"]}, {"_id": 0})
     return {"user": user_to_out(user).model_dump()}
+
+
+@api.delete("/users/me")
+async def delete_account(current=Depends(get_current_user)):
+    """Permanently delete user account and all associated data (App Store guideline 5.1.1(v))."""
+    user_id = current["user_id"]
+    user = await db.users.find_one({"user_id": user_id}, {"email": 1, "_id": 0})
+    email = (user or {}).get("email")
+    await asyncio.gather(
+        db.items.delete_many({"user_id": user_id}),
+        db.outfits.delete_many({"user_id": user_id}),
+        db.closets.delete_many({"user_id": user_id}),
+        db.user_sessions.delete_many({"user_id": user_id}),
+        db.feedback.delete_many({"user_id": user_id}),
+        db.swap_box.delete_many({"user_id": user_id}),
+        db.friends.delete_many({"$or": [{"from_user_id": user_id}, {"to_user_id": user_id}]}),
+        db.service_bookings.delete_many({"user_id": user_id}),
+        db.activity_feed.delete_many({"user_id": user_id}),
+        db.apple_transactions.delete_many({"user_id": user_id}),
+    )
+    if email:
+        await db.verification_codes.delete_many({"target": email})
+    await db.users.delete_one({"user_id": user_id})
+    return {"ok": True, "deleted": True}
 
 
 # ---------------------- Fashion Personas ----------------------
@@ -2494,6 +2645,65 @@ POINTS_PACKS = {
     "points_best":    {"points": 2800, "label": "Best Value", "price_cents": 399},
 }
 
+class BuyPointsTokenizedIn(BaseModel):
+    pack: str
+    source_id: str  # Square Web SDK card nonce
+    verification_token: Optional[str] = None  # SCA / 3DS token, optional
+
+
+@api.get("/billing/square-config")
+async def billing_square_config():
+    """Public config so frontend Web SDK can initialize."""
+    return {
+        "app_id": SQUARE_APPLICATION_ID,
+        "location_id": SQUARE_LOCATION_ID,
+        "environment": SQUARE_ENVIRONMENT,
+    }
+
+
+@api.post("/billing/buy-points-tokenized")
+async def billing_buy_points_tokenized(body: BuyPointsTokenizedIn, current=Depends(get_current_user)):
+    """Charge a Square Web SDK card nonce directly, credit points on success."""
+    if body.pack not in POINTS_PACKS:
+        raise HTTPException(status_code=400, detail="Invalid pack")
+    if not SQUARE_ACCESS_TOKEN:
+        raise HTTPException(status_code=503, detail="Billing not configured")
+    pack_info = POINTS_PACKS[body.pack]
+    user_id = current["user_id"]
+    payload = {
+        "source_id": body.source_id,
+        "idempotency_key": str(uuid.uuid4()),
+        "amount_money": {"amount": pack_info["price_cents"], "currency": "USD"},
+        "location_id": SQUARE_LOCATION_ID,
+        "reference_id": _sq_pts_ref(user_id, body.pack, pack_info["points"]),
+        "note": f"Wardrobe {pack_info['label']} Pack - {pack_info['points']} pts",
+    }
+    if body.verification_token:
+        payload["verification_token"] = body.verification_token
+    async with httpx.AsyncClient(timeout=20.0) as cli:
+        r = await cli.post(
+            f"{SQUARE_BASE_URL}/v2/payments",
+            headers=_square_headers(),
+            json=payload,
+        )
+    result = r.json()
+    if "errors" in result:
+        logger.error(f"Square tokenized payment error: {result['errors']}")
+        first_err = result["errors"][0] if result["errors"] else {}
+        raise HTTPException(status_code=402, detail=first_err.get("detail") or "Payment failed")
+    payment = result.get("payment") or {}
+    if payment.get("status") != "COMPLETED":
+        raise HTTPException(status_code=402, detail=f"Payment not completed: {payment.get('status')}")
+    new_balance = await award_points(user_id, pack_info["points"], f"square_web_{body.pack}")
+    return {
+        "ok": True,
+        "payment_id": payment.get("id"),
+        "receipt_url": payment.get("receipt_url"),
+        "points_added": pack_info["points"],
+        "new_balance": new_balance,
+    }
+
+
 @api.post("/billing/buy-points")
 async def billing_buy_points(body: BuyPointsIn, current=Depends(get_current_user)):
     if body.pack not in POINTS_PACKS:
@@ -2524,6 +2734,203 @@ async def billing_buy_points(body: BuyPointsIn, current=Depends(get_current_user
         logger.error(f"Square buy-points error: {result['errors']}")
         raise HTTPException(status_code=500, detail="Failed to create checkout")
     return {"ok": True, "checkout_url": result["payment_link"]["url"]}
+
+
+# ---------------------- Apple StoreKit IAP ----------------------
+APPLE_BUNDLE_ID = os.environ.get("APPLE_BUNDLE_ID", "com.wardrope.app")
+
+# Apple consumable IAP product IDs → points pack mapping.
+# Must match products created in App Store Connect.
+APPLE_PRODUCT_TO_PACK: Dict[str, str] = {
+    f"{APPLE_BUNDLE_ID}.points_starter": "points_starter",
+    f"{APPLE_BUNDLE_ID}.points_popular": "points_popular",
+    f"{APPLE_BUNDLE_ID}.points_best": "points_best",
+}
+
+
+def _decode_jws_payload(jws: str) -> dict:
+    """Decode the payload from a JWS (StoreKit signedTransaction) without verifying.
+
+    For StoreKit signed transactions, the x5c chain in the header is signed by Apple's
+    root CA. We verify the JWS signature against the leaf certificate's public key.
+    Production deployments should also validate the cert chain up to Apple Root CA - G3.
+    """
+    parts = jws.split(".")
+    if len(parts) != 3:
+        raise HTTPException(status_code=400, detail="Malformed signed transaction")
+    header_b64, payload_b64, signature_b64 = parts
+
+    def b64url(s: str) -> bytes:
+        pad = "=" * (-len(s) % 4)
+        return base64.urlsafe_b64decode(s + pad)
+
+    try:
+        header = json.loads(b64url(header_b64).decode())
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JWS header")
+
+    x5c = header.get("x5c") or []
+    if not x5c:
+        raise HTTPException(status_code=400, detail="Missing certificate chain in transaction")
+
+    try:
+        from cryptography import x509
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
+
+        leaf_der = base64.b64decode(x5c[0])
+        leaf_cert = x509.load_der_x509_certificate(leaf_der)
+        pub = leaf_cert.public_key()
+
+        signed_data = (header_b64 + "." + payload_b64).encode()
+        sig_raw = b64url(signature_b64)
+        if len(sig_raw) != 64:
+            raise HTTPException(status_code=400, detail="Unexpected signature length")
+        r = int.from_bytes(sig_raw[:32], "big")
+        s = int.from_bytes(sig_raw[32:], "big")
+        sig_der = encode_dss_signature(r, s)
+        pub.verify(sig_der, signed_data, ec.ECDSA(hashes.SHA256()))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"JWS signature verify failed: {e}")
+        raise HTTPException(status_code=401, detail="Transaction signature invalid")
+
+    try:
+        payload = json.loads(b64url(payload_b64).decode())
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JWS payload")
+    return payload
+
+
+class AppleVerifyIn(BaseModel):
+    signed_transaction: str  # signedTransactionInfo JWS from StoreKit 2
+    product_id: Optional[str] = None  # client hint, server uses payload value
+
+
+@api.post("/billing/apple-verify-purchase")
+async def billing_apple_verify(body: AppleVerifyIn, current=Depends(get_current_user)):
+    """Verify a StoreKit 2 signed transaction and award the corresponding points."""
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    payload = _decode_jws_payload(body.signed_transaction)
+
+    bundle_id = payload.get("bundleId")
+    if bundle_id != APPLE_BUNDLE_ID:
+        raise HTTPException(status_code=400, detail=f"Bundle id mismatch: {bundle_id}")
+
+    product_id = payload.get("productId")
+    pack_key = APPLE_PRODUCT_TO_PACK.get(product_id or "")
+    if not pack_key:
+        raise HTTPException(status_code=400, detail=f"Unknown product id: {product_id}")
+    pack = POINTS_PACKS[pack_key]
+
+    transaction_id = str(payload.get("transactionId") or "")
+    if not transaction_id:
+        raise HTTPException(status_code=400, detail="Missing transactionId")
+
+    # Idempotency: never award the same transaction twice
+    existing = await db.apple_transactions.find_one({"transaction_id": transaction_id}, {"_id": 0})
+    if existing:
+        user_doc = await db.users.find_one({"user_id": current["user_id"]}, {"points": 1, "_id": 0})
+        return {
+            "ok": True,
+            "already_awarded": True,
+            "points_added": 0,
+            "new_balance": (user_doc or {}).get("points", 0),
+        }
+
+    new_balance = await award_points(current["user_id"], pack["points"], f"apple_iap_{pack_key}")
+
+    await db.apple_transactions.insert_one({
+        "transaction_id": transaction_id,
+        "user_id": current["user_id"],
+        "product_id": product_id,
+        "pack": pack_key,
+        "points": pack["points"],
+        "bundle_id": bundle_id,
+        "environment": payload.get("environment"),
+        "purchase_date_ms": payload.get("purchaseDate"),
+        "raw_payload": payload,
+        "created_at": utcnow(),
+    })
+
+    return {
+        "ok": True,
+        "already_awarded": False,
+        "points_added": pack["points"],
+        "new_balance": new_balance,
+        "pack": pack_key,
+    }
+
+
+# Apple auto-renewable subscription product IDs → plan mapping.
+# Must match the products created in App Store Connect (one subscription group).
+APPLE_SUB_PRODUCT_TO_PLAN: Dict[str, Dict[str, str]] = {
+    f"{APPLE_BUNDLE_ID}.sub_single_monthly": {"plan": "single", "period": "monthly"},
+    f"{APPLE_BUNDLE_ID}.sub_single_annual": {"plan": "single", "period": "annual"},
+    f"{APPLE_BUNDLE_ID}.sub_couples_monthly": {"plan": "couples", "period": "monthly"},
+    f"{APPLE_BUNDLE_ID}.sub_couples_annual": {"plan": "couples", "period": "annual"},
+    f"{APPLE_BUNDLE_ID}.sub_family_monthly": {"plan": "family", "period": "monthly"},
+    f"{APPLE_BUNDLE_ID}.sub_family_annual": {"plan": "family", "period": "annual"},
+}
+
+
+@api.post("/billing/apple-verify-subscription")
+async def billing_apple_verify_subscription(body: AppleVerifyIn, current=Depends(get_current_user)):
+    """Verify a StoreKit 2 signed subscription transaction and activate the plan."""
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    payload = _decode_jws_payload(body.signed_transaction)
+
+    bundle_id = payload.get("bundleId")
+    if bundle_id != APPLE_BUNDLE_ID:
+        raise HTTPException(status_code=400, detail=f"Bundle id mismatch: {bundle_id}")
+
+    product_id = payload.get("productId")
+    plan = APPLE_SUB_PRODUCT_TO_PLAN.get(product_id or "")
+    if not plan:
+        raise HTTPException(status_code=400, detail=f"Unknown subscription product: {product_id}")
+
+    transaction_id = str(payload.get("transactionId") or "")
+    original_tx = str(payload.get("originalTransactionId") or transaction_id)
+    if not transaction_id:
+        raise HTTPException(status_code=400, detail="Missing transactionId")
+
+    expires_ms = payload.get("expiresDate")
+    await db.users.update_one(
+        {"user_id": current["user_id"]},
+        {"$set": {
+            "plan_type": plan["plan"],
+            "plan_period": plan["period"],
+            "plan_addons": [],
+            "subscription_status": "active",
+            "subscription_provider": "apple",
+            "apple_original_transaction_id": original_tx,
+            "subscription_expires_ms": expires_ms,
+        }},
+    )
+
+    # Record the transaction (idempotent on transactionId)
+    if not await db.apple_transactions.find_one({"transaction_id": transaction_id}, {"_id": 1}):
+        await db.apple_transactions.insert_one({
+            "transaction_id": transaction_id,
+            "original_transaction_id": original_tx,
+            "user_id": current["user_id"],
+            "product_id": product_id,
+            "plan": plan["plan"],
+            "period": plan["period"],
+            "kind": "subscription",
+            "bundle_id": bundle_id,
+            "environment": payload.get("environment"),
+            "expires_date_ms": expires_ms,
+            "raw_payload": payload,
+            "created_at": utcnow(),
+        })
+
+    user_doc = await db.users.find_one({"user_id": current["user_id"]}, {"_id": 0})
+    return {"ok": True, "user": user_to_out(user_doc).model_dump()}
 
 
 # ---------------------- Geo Services ----------------------
