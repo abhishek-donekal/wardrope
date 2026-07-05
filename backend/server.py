@@ -2740,11 +2740,11 @@ async def billing_buy_points(body: BuyPointsIn, current=Depends(get_current_user
 APPLE_BUNDLE_ID = os.environ.get("APPLE_BUNDLE_ID", "com.wardrope.app")
 
 # Apple consumable IAP product IDs → points pack mapping.
-# Must match products created in App Store Connect.
+# Product IDs exactly as created in App Store Connect (no bundle-id prefix).
 APPLE_PRODUCT_TO_PACK: Dict[str, str] = {
-    f"{APPLE_BUNDLE_ID}.points_starter": "points_starter",
-    f"{APPLE_BUNDLE_ID}.points_popular": "points_popular",
-    f"{APPLE_BUNDLE_ID}.points_best": "points_best",
+    "points_starter": "points_starter",
+    "points_popular": "points_popular",
+    "points_best": "points_best",
 }
 
 
@@ -2866,14 +2866,14 @@ async def billing_apple_verify(body: AppleVerifyIn, current=Depends(get_current_
 
 
 # Apple auto-renewable subscription product IDs → plan mapping.
-# Must match the products created in App Store Connect (one subscription group).
+# Product IDs exactly as created in App Store Connect (no bundle-id prefix).
 APPLE_SUB_PRODUCT_TO_PLAN: Dict[str, Dict[str, str]] = {
-    f"{APPLE_BUNDLE_ID}.sub_single_monthly": {"plan": "single", "period": "monthly"},
-    f"{APPLE_BUNDLE_ID}.sub_single_annual": {"plan": "single", "period": "annual"},
-    f"{APPLE_BUNDLE_ID}.sub_couples_monthly": {"plan": "couples", "period": "monthly"},
-    f"{APPLE_BUNDLE_ID}.sub_couples_annual": {"plan": "couples", "period": "annual"},
-    f"{APPLE_BUNDLE_ID}.sub_family_monthly": {"plan": "family", "period": "monthly"},
-    f"{APPLE_BUNDLE_ID}.sub_family_annual": {"plan": "family", "period": "annual"},
+    "sub_single_monthly": {"plan": "single", "period": "monthly"},
+    "sub_single_annual": {"plan": "single", "period": "annual"},
+    "sub_couples_monthly": {"plan": "couples", "period": "monthly"},
+    "sub_couples_annual": {"plan": "couples", "period": "annual"},
+    "sub_family_monthly": {"plan": "family", "period": "monthly"},
+    "sub_family_annual": {"plan": "family", "period": "annual"},
 }
 
 

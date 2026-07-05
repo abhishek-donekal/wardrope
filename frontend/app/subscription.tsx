@@ -22,16 +22,15 @@ import { colors, type, space } from "@/src/theme";
 type Period = "monthly" | "annual";
 type PlanKey = "single" | "couples" | "family";
 
-const BUNDLE_ID = "com.wardrope.app";
-
-// Apple auto-renewable subscription product IDs (must match App Store Connect).
+// Apple auto-renewable subscription product IDs, exactly as created in
+// App Store Connect (no bundle-id prefix).
 const APPLE_SUB_IDS: Record<string, string> = {
-  "single|monthly": `${BUNDLE_ID}.sub_single_monthly`,
-  "single|annual": `${BUNDLE_ID}.sub_single_annual`,
-  "couples|monthly": `${BUNDLE_ID}.sub_couples_monthly`,
-  "couples|annual": `${BUNDLE_ID}.sub_couples_annual`,
-  "family|monthly": `${BUNDLE_ID}.sub_family_monthly`,
-  "family|annual": `${BUNDLE_ID}.sub_family_annual`,
+  "single|monthly": "sub_single_monthly",
+  "single|annual": "sub_single_annual",
+  "couples|monthly": "sub_couples_monthly",
+  "couples|annual": "sub_couples_annual",
+  "family|monthly": "sub_family_monthly",
+  "family|annual": "sub_family_annual",
 };
 
 const PLANS: { key: PlanKey; name: string; monthly: number; annual: number; description: string; features: string[] }[] = [
