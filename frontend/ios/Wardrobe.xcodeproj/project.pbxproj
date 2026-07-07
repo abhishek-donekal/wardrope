@@ -13,6 +13,7 @@
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		CE8B1BD97ACC3AEAFF753C96 /* libPods-Wardrobe.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3C42E618B31071161D7ECFEB /* libPods-Wardrobe.a */; };
 		D0B15E93FCCE34DBF47BC0C1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 44A7226C8CB9F9F0CB7E2095 /* PrivacyInfo.xcprivacy */; };
+		F02974F32FFD57EC00B2B951 /* wardrobeIAP.storekit in Resources */ = {isa = PBXBuildFile; fileRef = F02974F22FFD57E300B2B951 /* wardrobeIAP.storekit */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
@@ -21,12 +22,13 @@
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Wardrobe/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Wardrobe/Info.plist; sourceTree = "<group>"; };
 		3C42E618B31071161D7ECFEB /* libPods-Wardrobe.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Wardrobe.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		44A7226C8CB9F9F0CB7E2095 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Wardrobe/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		44A7226C8CB9F9F0CB7E2095 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Wardrobe/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = Wardrobe/SplashScreen.storyboard; sourceTree = "<group>"; };
 		B85052AF160A9B0A0F489676 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Wardrobe/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
 		EB23E43544FAEE297B53DD15 /* Pods-Wardrobe.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Wardrobe.release.xcconfig"; path = "Target Support Files/Pods-Wardrobe/Pods-Wardrobe.release.xcconfig"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		F02974F22FFD57E300B2B951 /* wardrobeIAP.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = wardrobeIAP.storekit; sourceTree = "<group>"; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Wardrobe/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* Wardrobe-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Wardrobe-Bridging-Header.h"; path = "Wardrobe/Wardrobe-Bridging-Header.h"; sourceTree = "<group>"; };
 		FB3E5605E04B5B395F77C0AA /* Pods-Wardrobe.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Wardrobe.debug.xcconfig"; path = "Target Support Files/Pods-Wardrobe/Pods-Wardrobe.debug.xcconfig"; sourceTree = "<group>"; };
@@ -50,7 +52,6 @@
 				FB3E5605E04B5B395F77C0AA /* Pods-Wardrobe.debug.xcconfig */,
 				EB23E43544FAEE297B53DD15 /* Pods-Wardrobe.release.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -95,6 +96,7 @@
 		83CBB9F61A601CBA00E9B192 = {
 			isa = PBXGroup;
 			children = (
+				F02974F22FFD57E300B2B951 /* wardrobeIAP.storekit */,
 				13B07FAE1A68108700A75B9A /* Wardrobe */,
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
@@ -193,6 +195,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F02974F32FFD57EC00B2B951 /* wardrobeIAP.storekit in Resources */,
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
