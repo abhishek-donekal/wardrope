@@ -3,6 +3,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
 import { Platform } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 
 import { AuthProvider } from "@/src/contexts/AuthContext";
 import { bootThemeFromStorage, ThemeProvider, useTheme } from "@/src/contexts/ThemeContext";
@@ -42,10 +43,12 @@ export default function RootLayout() {
   if ((!loaded && !error) || !themeReady) return null;
 
   return (
-    <AuthProvider>
-      <ThemeProvider>
-        <RootNavigator />
-      </ThemeProvider>
-    </AuthProvider>
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+      <AuthProvider>
+        <ThemeProvider>
+          <RootNavigator />
+        </ThemeProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
