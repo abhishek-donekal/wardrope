@@ -26,12 +26,12 @@ const BUNDLE_ID = "com.wardrope.app";
 
 // Apple auto-renewable subscription product IDs (must match App Store Connect).
 const APPLE_SUB_IDS: Record<string, string> = {
-  "single|monthly": `${BUNDLE_ID}.sub_single_monthly`,
-  "single|annual": `${BUNDLE_ID}.sub_single_annual`,
-  "couples|monthly": `${BUNDLE_ID}.sub_couples_monthly`,
-  "couples|annual": `${BUNDLE_ID}.sub_couples_annual`,
-  "family|monthly": `${BUNDLE_ID}.sub_family_monthly`,
-  "family|annual": `${BUNDLE_ID}.sub_family_annual`,
+  "single|monthly": "sub_single_monthly",
+  "single|annual": "sub_single_annual",
+  "couples|monthly": "sub_couples_monthly",
+  "couples|annual": "sub_couples_annual",
+  "family|monthly": "sub_family_monthly",
+  "family|annual": "sub_family_annual",
 };
 
 const PLANS: { key: PlanKey; name: string; monthly: number; annual: number; description: string; features: string[] }[] = [

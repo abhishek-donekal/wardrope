@@ -25,7 +25,7 @@
           "locale" : "en_US"
         }
       ],
-      "productID" : "com.wardrope.app.points_starter",
+      "productID" : "points_starter",
       "referenceName" : "Points Starter",
       "type" : "Consumable"
     },
@@ -40,7 +40,7 @@
           "locale" : "en_US"
         }
       ],
-      "productID" : "com.wardrope.app.points_popular",
+      "productID" : "points_popular",
       "referenceName" : "Points Popular",
       "type" : "Consumable"
     },
@@ -55,7 +55,7 @@
           "locale" : "en_US"
         }
       ],
-      "productID" : "com.wardrope.app.points_best",
+      "productID" : "points_best",
       "referenceName" : "Points best",
       "type" : "Consumable"
     }
@@ -101,7 +101,7 @@
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.wardrope.app.sub_single_monthly",
+          "productID" : "sub_single_monthly",
           "recurringSubscriptionPeriod" : "P1M",
           "referenceName" : "Single Closet",
           "subscriptionGroupID" : "FA2D7D2C",
@@ -129,7 +129,7 @@
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.wardrope.app.sub_single_annual",
+          "productID" : "sub_single_annual",
           "recurringSubscriptionPeriod" : "P1Y",
           "referenceName" : "Single Closet - Annual",
           "subscriptionGroupID" : "FA2D7D2C",
@@ -157,7 +157,7 @@
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.wardrope.app.sub_couples_monthly",
+          "productID" : "sub_couples_monthly",
           "recurringSubscriptionPeriod" : "P1M",
           "referenceName" : "Couples Closet - Monthly",
           "subscriptionGroupID" : "FA2D7D2C",
@@ -185,7 +185,7 @@
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.wardrope.app.sub_couples_annual",
+          "productID" : "sub_couples_annual",
           "recurringSubscriptionPeriod" : "P1Y",
           "referenceName" : "Couples Closet - Annual",
           "subscriptionGroupID" : "FA2D7D2C",
@@ -213,7 +213,7 @@
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.wardrope.app.sub_family_monthly",
+          "productID" : "sub_family_monthly",
           "recurringSubscriptionPeriod" : "P1M",
           "referenceName" : "Family Closet - Monthly",
           "subscriptionGroupID" : "FA2D7D2C",
@@ -241,7 +241,7 @@
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.wardrope.app.sub_family_annual",
+          "productID" : "sub_family_annual",
           "recurringSubscriptionPeriod" : "P1Y",
           "referenceName" : "Family Closet - Annual",
           "subscriptionGroupID" : "FA2D7D2C",

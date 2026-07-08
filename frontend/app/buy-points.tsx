@@ -33,9 +33,9 @@ type Pack = {
 const BUNDLE_ID = "com.wardrope.app";
 
 const APPLE_PRODUCT_IDS: Record<PackId, string> = {
-  points_starter: `${BUNDLE_ID}.points_starter`,
-  points_popular: `${BUNDLE_ID}.points_popular`,
-  points_best: `${BUNDLE_ID}.points_best`,
+  points_starter: "points_starter",
+  points_popular: "points_popular",
+  points_best: "points_best",
 };
 
 const PACKS: Pack[] = [
