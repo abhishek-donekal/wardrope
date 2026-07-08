@@ -20,8 +20,8 @@
       "internalID" : "446E72B0",
       "localizations" : [
         {
-          "description" : "",
-          "displayName" : "",
+          "description" : "500 points to use in the Swap Box",
+          "displayName" : "Starter Pack",
           "locale" : "en_US"
         }
       ],
@@ -35,8 +35,8 @@
       "internalID" : "94476691",
       "localizations" : [
         {
-          "description" : "",
-          "displayName" : "",
+          "description" : "1200 points to use in the Swap Box",
+          "displayName" : "Popular Pack",
           "locale" : "en_US"
         }
       ],
@@ -50,8 +50,8 @@
       "internalID" : "9B7C9157",
       "localizations" : [
         {
-          "description" : "",
-          "displayName" : "",
+          "description" : "2800 points to use in the Swap Box",
+          "displayName" : "Best Value Pack",
           "locale" : "en_US"
         }
       ],
@@ -96,12 +96,12 @@
           "introductoryOffer" : null,
           "localizations" : [
             {
-              "description" : "",
-              "displayName" : "",
+              "description" : "Unlimited items, AI tagging, Outfit builder",
+              "displayName" : "Single Closet Monthly",
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.wardrobe.app.sub_single_monthly",
+          "productID" : "com.wardrope.app.sub_single_monthly",
           "recurringSubscriptionPeriod" : "P1M",
           "referenceName" : "Single Closet",
           "subscriptionGroupID" : "FA2D7D2C",
@@ -124,8 +124,8 @@
           "introductoryOffer" : null,
           "localizations" : [
             {
-              "description" : "",
-              "displayName" : "",
+              "description" : "Unlimited items, AI tagging, Outfit builder - Annual",
+              "displayName" : "Single Closet Annual",
               "locale" : "en_US"
             }
           ],
@@ -152,8 +152,8 @@
           "introductoryOffer" : null,
           "localizations" : [
             {
-              "description" : "",
-              "displayName" : "",
+              "description" : "Two wardrobes, shared outfit ideas",
+              "displayName" : "Couples Closet Monthly",
               "locale" : "en_US"
             }
           ],
@@ -180,8 +180,8 @@
           "introductoryOffer" : null,
           "localizations" : [
             {
-              "description" : "",
-              "displayName" : "",
+              "description" : "Two wardrobes, shared outfit ideas - Annual",
+              "displayName" : "Couples Closet Annual",
               "locale" : "en_US"
             }
           ],
@@ -208,8 +208,8 @@
           "introductoryOffer" : null,
           "localizations" : [
             {
-              "description" : "",
-              "displayName" : "",
+              "description" : "Up to 5 users, family style profiles",
+              "displayName" : "Family Closet Monthly",
               "locale" : "en_US"
             }
           ],
@@ -236,8 +236,8 @@
           "introductoryOffer" : null,
           "localizations" : [
             {
-              "description" : "",
-              "displayName" : "",
+              "description" : "Up to 5 users, family style profiles - Annual",
+              "displayName" : "Family Closet Annual",
               "locale" : "en_US"
             }
           ],
