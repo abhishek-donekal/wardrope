@@ -1,0 +1,260 @@
+{
+  "appPolicies" : {
+    "eula" : "",
+    "policies" : [
+      {
+        "locale" : "en_US",
+        "policyText" : "",
+        "policyURL" : ""
+      }
+    ]
+  },
+  "identifier" : "011741D3",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "0.99",
+      "familyShareable" : false,
+      "internalID" : "446E72B0",
+      "localizations" : [
+        {
+          "description" : "500 points to use in the Swap Box",
+          "displayName" : "Starter Pack",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "points_starter",
+      "referenceName" : "Points Starter",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "1.99",
+      "familyShareable" : false,
+      "internalID" : "94476691",
+      "localizations" : [
+        {
+          "description" : "1200 points to use in the Swap Box",
+          "displayName" : "Popular Pack",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "points_popular",
+      "referenceName" : "Points Popular",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "3.99",
+      "familyShareable" : false,
+      "internalID" : "9B7C9157",
+      "localizations" : [
+        {
+          "description" : "2800 points to use in the Swap Box",
+          "displayName" : "Best Value Pack",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "points_best",
+      "referenceName" : "Points best",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : {
+    "_askToBuyEnabled" : false,
+    "_billingGracePeriodEnabled" : false,
+    "_billingIssuesEnabled" : false,
+    "_disableDialogs" : false,
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_renewalBillingIssuesEnabled" : false,
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+
+    ],
+    "_timeRate" : 0
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "FA2D7D2C",
+      "localizations" : [
+
+      ],
+      "name" : "Wardrobe Plans",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "1.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "60E5F3A5",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Unlimited items, AI tagging, Outfit builder",
+              "displayName" : "Single Closet Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "sub_single_monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Single Closet",
+          "subscriptionGroupID" : "FA2D7D2C",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "17.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "36BE2830",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Unlimited items, AI tagging, Outfit builder - Annual",
+              "displayName" : "Single Closet Annual",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "sub_single_annual",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Single Closet - Annual",
+          "subscriptionGroupID" : "FA2D7D2C",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "2.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "D6B58396",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Two wardrobes, shared outfit ideas",
+              "displayName" : "Couples Closet Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "sub_couples_monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Couples Closet - Monthly",
+          "subscriptionGroupID" : "FA2D7D2C",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "26.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "BB7C5775",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Two wardrobes, shared outfit ideas - Annual",
+              "displayName" : "Couples Closet Annual",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "sub_couples_annual",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Couples Closet - Annual",
+          "subscriptionGroupID" : "FA2D7D2C",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "4.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "5DD07EA2",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Up to 5 users, family style profiles",
+              "displayName" : "Family Closet Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "sub_family_monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Family Closet - Monthly",
+          "subscriptionGroupID" : "FA2D7D2C",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "44.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "7E43D7E2",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Up to 5 users, family style profiles - Annual",
+              "displayName" : "Family Closet Annual",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "sub_family_annual",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Family Closet - Annual",
+          "subscriptionGroupID" : "FA2D7D2C",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}
