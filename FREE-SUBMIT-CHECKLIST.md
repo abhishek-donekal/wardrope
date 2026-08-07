@@ -1,4 +1,10 @@
 # Free-Version Submission Checklist (build 17)
+
+> ## ✅ SUBMITTED 2026-08-07 3:53 PM — status "Waiting for Review"
+> Build **1.0.0 (17)** · Items Submitted = **1** (App Version only, zero IAPs) · Resolution Center reply posted.
+> **While in review: change NOTHING in ASC.** Above all, never click "Add for Review" on the Subscriptions page.
+> Everything below is the record of what was done.
+
 **Created:** 2026-08-08 (updated after QC sweep) · **Strategy:** ship FREE (no IAP) now → client sees app live; monetization returns in an update once the Paid Apps Agreement is Active. Free Apps Agreement is already **Active** — nothing tax-related blocks this submission.
 
 > ⚠️ **Submit BUILD 17, nothing earlier.** Build 14 was superseded by QC fixes (terms of use plan/Square reference, Info.plist permission strings, Services placeholder screens, sync route guards). Ignore builds 9–16 entirely (15 canceled, 16 canceled; 14 lacks QC fixes).
