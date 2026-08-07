@@ -1,9 +1,9 @@
-# Free-Version Submission Checklist (build 15)
+# Free-Version Submission Checklist (build 17)
 **Created:** 2026-08-08 (updated after QC sweep) · **Strategy:** ship FREE (no IAP) now → client sees app live; monetization returns in an update once the Paid Apps Agreement is Active. Free Apps Agreement is already **Active** — nothing tax-related blocks this submission.
 
-> ⚠️ **Submit BUILD 15, not 14.** Build 14 was superseded by QC fixes (terms of use plan/Square reference, Info.plist permission strings, Services placeholder screens, sync route guards). Ignore builds 9–14 entirely.
+> ⚠️ **Submit BUILD 17, nothing earlier.** Build 14 was superseded by QC fixes (terms of use plan/Square reference, Info.plist permission strings, Services placeholder screens, sync route guards). Ignore builds 9–16 entirely (15 canceled, 16 canceled; 14 lacks QC fixes).
 
-## QC sweep results (2026-08-08, all fixed in build 15)
+## QC sweep results (2026-08-08, all fixed in build 17)
 | Item | Status |
 |---|---|
 | 2.3.10 screenshots — iOS status bar | ✅ fixed (all 7 product shots verified) |
@@ -16,8 +16,13 @@
 | 5-profile screenshot showed "Plan: Pro" + personal email | ✅ replaced (persona row + sample data), PNG regenerated |
 | Purchase-reference sweep of all iOS screens | ✅ clean (Shop tab = external physical-goods links — allowed) |
 | Signup flow dead-end check | ✅ email verify has "Skip for now"; backend doesn't gate on verification |
+| Vlog screen = static "Coming soon" teaser + fake "Notify me" | ✅ hidden behind VLOG_ENABLED=false |
+| Friend profile screen always showed "Profile not found" | ✅ response mapping fixed |
+| Barcode add showed "Added!" even when nothing saved | ✅ now checks the actual result |
+| Activity feed rendered generic "did something" rows | ✅ field mapping normalized |
+| Deep-link flash of purchase UI | ✅ synchronous render guards added |
 
-## What changed in build 15 (commits `e2fca8a` + `defec59`, pushed)
+## What changed in build 17 (commits `e2fca8a` + `defec59` + `fab7c86` + `6fd49ed`, pushed)
 - **All purchase UI hidden on iOS** via `IAP_ENABLED` flag: no Buy Points button, no Plan & Billing row, no plan references, purchase screens route-guarded. Web/Android keep Square unchanged.
 - **AI Stylist FIXED** (reviewer had seen "Stylist is taking a break"): backend was calling retired Claude models; also fixed a Vercel routing regression that 404'd the entire API, and a BOM-corrupted `ANTHROPIC_API_KEY`. Verified live: stylist returns real outfits; AI tagging model also updated.
 - buy-points balance bug + subscription "Manage" crash fixed (web).
@@ -30,7 +35,7 @@
 - Leave the 9 products themselves alone in the IAP/Subscriptions sections (don't delete — they're for later).
 
 ### 2. Swap the build
-- Version page → Build section → remove build 10 → **select build 15** (wait ~10 min after upload email for processing). NOT 9–14 — only 15 has the free-version flag.
+- Version page → Build section → remove build 10 → **select build 17** (wait ~10 min after upload email for processing). NOT 9–16 — only 17 has the free-version flag.
 
 ### 3. Screenshots
 - **Re-upload `screenshots/5-profile.png`** — it was regenerated today (old version showed "Plan: Pro" + a personal email; new one shows "Stylist persona: The Editor" + sample data). Replace whatever profile shot is currently in ASC.
@@ -49,7 +54,7 @@
 Hello,
 
 Thank you for the detailed review notes. We have made the following changes
-in build 15:
+in build 17:
 
 1. In-app purchases removed. This version of the app is entirely free —
    all references to points packs and subscription plans have been removed
