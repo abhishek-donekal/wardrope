@@ -1,7 +1,23 @@
-# Free-Version Submission Checklist (build 14)
-**Created:** 2026-08-08 · **Strategy:** ship FREE (no IAP) now → client sees app live; monetization returns in an update once the Paid Apps Agreement is Active. Free Apps Agreement is already **Active** — nothing tax-related blocks this submission.
+# Free-Version Submission Checklist (build 15)
+**Created:** 2026-08-08 (updated after QC sweep) · **Strategy:** ship FREE (no IAP) now → client sees app live; monetization returns in an update once the Paid Apps Agreement is Active. Free Apps Agreement is already **Active** — nothing tax-related blocks this submission.
 
-## What changed in build 14 (all committed `e2fca8a`, pushed)
+> ⚠️ **Submit BUILD 15, not 14.** Build 14 was superseded by QC fixes (terms of use plan/Square reference, Info.plist permission strings, Services placeholder screens, sync route guards). Ignore builds 9–14 entirely.
+
+## QC sweep results (2026-08-08, all fixed in build 15)
+| Item | Status |
+|---|---|
+| 2.3.10 screenshots — iOS status bar | ✅ fixed (all 7 product shots verified) |
+| 5.1.1(iv) camera/photo purpose strings | ✅ specific wording now in Info.plist (ships in binary) |
+| 5.1.1(v) account deletion | ✅ in-app row + DELETE endpoint, live-tested end-to-end today |
+| AI Stylist error reviewer saw | ✅ fixed + live-verified (real outfits) |
+| AI tagging (silently broken) | ✅ fixed (same retired-model root cause) |
+| Terms of Use mentioned paid plans + Square | ✅ gated off iOS (was a 2.1(b)/3.1.1 reference risk) |
+| Services screens = empty shells + dev-facing "configure API key" text | ✅ hidden until Places key exists; banner reworded |
+| 5-profile screenshot showed "Plan: Pro" + personal email | ✅ replaced (persona row + sample data), PNG regenerated |
+| Purchase-reference sweep of all iOS screens | ✅ clean (Shop tab = external physical-goods links — allowed) |
+| Signup flow dead-end check | ✅ email verify has "Skip for now"; backend doesn't gate on verification |
+
+## What changed in build 15 (commits `e2fca8a` + `defec59`, pushed)
 - **All purchase UI hidden on iOS** via `IAP_ENABLED` flag: no Buy Points button, no Plan & Billing row, no plan references, purchase screens route-guarded. Web/Android keep Square unchanged.
 - **AI Stylist FIXED** (reviewer had seen "Stylist is taking a break"): backend was calling retired Claude models; also fixed a Vercel routing regression that 404'd the entire API, and a BOM-corrupted `ANTHROPIC_API_KEY`. Verified live: stylist returns real outfits; AI tagging model also updated.
 - buy-points balance bug + subscription "Manage" crash fixed (web).
@@ -14,11 +30,12 @@
 - Leave the 9 products themselves alone in the IAP/Subscriptions sections (don't delete — they're for later).
 
 ### 2. Swap the build
-- Version page → Build section → remove build 10 → **select build 14** (wait ~10 min after upload email for processing). NOT 10/11/12/13 — only 14 has the free-version flag.
+- Version page → Build section → remove build 10 → **select build 15** (wait ~10 min after upload email for processing). NOT 9–14 — only 15 has the free-version flag.
 
 ### 3. Screenshots
-- iPhone set (5, status-bar-fixed) should already be uploaded; add the 2 iPad screenshots `screenshots/ipad-1-closet.png` + `ipad-2-stylist.png` (2048×2732) if not present.
-- ⚠️ Screenshots must NOT show Buy Points / Plan & Billing UI. Current 5 iPhone shots: 1-closet, 2-stylist, 3-looks, 4-add-item, 5-profile — check 5-profile.png: if it shows the Buy Points button or Plan row, drop or re-crop it (safest: submit without it; 4 shots is fine).
+- **Re-upload `screenshots/5-profile.png`** — it was regenerated today (old version showed "Plan: Pro" + a personal email; new one shows "Stylist persona: The Editor" + sample data). Replace whatever profile shot is currently in ASC.
+- Other 4 iPhone shots (1-closet, 2-stylist, 3-looks, 4-add-item) are unchanged — leave if already uploaded.
+- Add the 2 iPad screenshots `ipad-1-closet.png` + `ipad-2-stylist.png` (2048×2732) if not present.
 
 ### 4. App Review Information
 - Sign-in: `applereview@wardrobe-demo.com` / `Review2026!Wardrobe` (LOGIN, not sign-up; account now has 4 seeded closet items so AI features demo instantly).
@@ -32,7 +49,7 @@
 Hello,
 
 Thank you for the detailed review notes. We have made the following changes
-in build 14:
+in build 15:
 
 1. In-app purchases removed. This version of the app is entirely free —
    all references to points packs and subscription plans have been removed

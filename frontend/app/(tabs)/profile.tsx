@@ -15,7 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
 import { api } from "@/src/lib/api";
-import { IAP_ENABLED, SERVICES_DIRECTORY_ENABLED } from "@/src/lib/featureFlags";
+import { IAP_ENABLED, SERVICES_DIRECTORY_ENABLED, VLOG_ENABLED } from "@/src/lib/featureFlags";
 import { useAuth } from "@/src/contexts/AuthContext";
 import { useTheme } from "@/src/contexts/ThemeContext";
 import { useResponsive } from "@/src/hooks/use-responsive";
@@ -248,13 +248,15 @@ export default function Profile() {
             onPress={() => router.push("/activity-feed")}
             testID="profile-row-activity-feed"
           />
-          <Row
-            icon="play-circle-outline"
-            label="Vlog"
-            sub="Style tips & inspiration"
-            onPress={() => router.push("/vlog")}
-            testID="profile-row-vlog"
-          />
+          {VLOG_ENABLED && (
+            <Row
+              icon="play-circle-outline"
+              label="Vlog"
+              sub="Style tips & inspiration"
+              onPress={() => router.push("/vlog")}
+              testID="profile-row-vlog"
+            />
+          )}
         </Section>
 
         <Section title="Personalization">

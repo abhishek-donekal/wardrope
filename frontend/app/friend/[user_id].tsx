@@ -63,8 +63,16 @@ export default function FriendProfile() {
     if (!user_id) return;
     setError(null);
     try {
-      const res = await api<{ profile: FriendProfile }>(`/friends/${user_id}/profile`);
-      setProfile(res.profile ?? null);
+      const res = await api<{
+        friend: { user_id: string; name: string; picture?: string | null; points?: number };
+        shared_closets?: SharedCloset[];
+        public_looks?: OutfitCard[];
+      }>(`/friends/${user_id}/profile`);
+      setProfile(
+        res.friend
+          ? { ...res.friend, shared_closets: res.shared_closets ?? [], looks: res.public_looks ?? [] }
+          : null
+      );
     } catch (e: any) {
       setError(e?.message || "Could not load profile.");
     } finally {

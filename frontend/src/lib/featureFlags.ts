@@ -12,3 +12,7 @@ export const IAP_ENABLED = Platform.OS !== "ios";
 // screens are empty shells, which App Review treats as placeholder content.
 // Re-enable once GOOGLE_PLACES_API_KEY is set on the backend.
 export const SERVICES_DIRECTORY_ENABLED = false;
+
+// The vlog screen is a static "Coming soon" teaser — placeholder content that
+// App Review rejects under guideline 2.1. Hide until real content exists.
+export const VLOG_ENABLED = false;
