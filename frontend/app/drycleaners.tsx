@@ -176,7 +176,7 @@ export default function DryClearners() {
           <View style={styles.apiBanner}>
             <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
             <Text style={styles.apiBannerText}>
-              Location services coming soon — configure Google Places API key.
+              Nearby suggestions are not available in your area yet.
             </Text>
           </View>
         )}

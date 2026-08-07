@@ -35,7 +35,7 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>13</string>
+    <string>14</string>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
     <key>LSMinimumSystemVersion</key>
@@ -50,9 +50,9 @@
       <true/>
     </dict>
     <key>NSCameraUsageDescription</key>
-    <string>Wardrobe uses the camera to photograph your clothing items.</string>
+    <string>Wardrobe uses your camera to photograph clothing items so they can be catalogued and AI-tagged in your digital wardrobe.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your microphone</string>
+    <string>Microphone access is not used by Wardrobe but is required by the camera framework.</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>Wardrobe may save processed clothing images to your photo library.</string>
     <key>NSPhotoLibraryUsageDescription</key>

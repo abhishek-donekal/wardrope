@@ -65,6 +65,7 @@ export default function BuyPoints() {
   useEffect(() => {
     if (!IAP_ENABLED) router.replace("/(tabs)/profile");
   }, [router]);
+  if (!IAP_ENABLED) return null;
 
   const [webModalOpen, setWebModalOpen] = useState(false);
   const [webModalPack, setWebModalPack] = useState<Pack | null>(null);

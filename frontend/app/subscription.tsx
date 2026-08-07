@@ -91,9 +91,11 @@ export default function Subscription() {
   const productsReadyRef = useRef(false);
 
   // Purchases disabled on this platform — never render the paywall.
+  // (IAP_ENABLED is a platform constant, so the early return keeps a stable hook order.)
   useEffect(() => {
     if (!IAP_ENABLED) router.replace("/(tabs)/profile");
   }, [router]);
+  if (!IAP_ENABLED) return null;
 
   // ----- Apple StoreKit auto-renewable subscriptions (iOS only) -----
   useEffect(() => {

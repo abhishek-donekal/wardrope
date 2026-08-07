@@ -15,7 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
 import { api } from "@/src/lib/api";
-import { IAP_ENABLED } from "@/src/lib/featureFlags";
+import { IAP_ENABLED, SERVICES_DIRECTORY_ENABLED } from "@/src/lib/featureFlags";
 import { useAuth } from "@/src/contexts/AuthContext";
 import { useTheme } from "@/src/contexts/ThemeContext";
 import { useResponsive } from "@/src/hooks/use-responsive";
@@ -304,29 +304,31 @@ export default function Profile() {
           />
         </Section>
 
-        <Section title="Services">
-          <Row
-            icon="paw-outline"
-            label="Find Groomer"
-            sub="Pet grooming services near you"
-            onPress={() => router.push("/grooming")}
-            testID="profile-row-grooming"
-          />
-          <Row
-            icon="filing-outline"
-            label="Closet Organizers"
-            sub="Professional organizers near you"
-            onPress={() => router.push("/organizers")}
-            testID="profile-row-organizers"
-          />
-          <Row
-            icon="color-wand-outline"
-            label="Dry Cleaners"
-            sub="Schedule pickup, earn 50 pts"
-            onPress={() => router.push("/drycleaners")}
-            testID="profile-row-drycleaners"
-          />
-        </Section>
+        {SERVICES_DIRECTORY_ENABLED && (
+          <Section title="Services">
+            <Row
+              icon="paw-outline"
+              label="Find Groomer"
+              sub="Pet grooming services near you"
+              onPress={() => router.push("/grooming")}
+              testID="profile-row-grooming"
+            />
+            <Row
+              icon="filing-outline"
+              label="Closet Organizers"
+              sub="Professional organizers near you"
+              onPress={() => router.push("/organizers")}
+              testID="profile-row-organizers"
+            />
+            <Row
+              icon="color-wand-outline"
+              label="Dry Cleaners"
+              sub="Schedule pickup, earn 50 pts"
+              onPress={() => router.push("/drycleaners")}
+              testID="profile-row-drycleaners"
+            />
+          </Section>
+        )}
 
         <Section title="Account">
           <Row
