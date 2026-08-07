@@ -14,8 +14,8 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not started
 
 - [x] Apple IAP (StoreKit / `expo-iap`) code in app — subs + points (HEAD commit `2988971`)
 - [x] Product IDs: ASC uses short IDs (`sub_single_monthly`, `points_starter`, …) — code updated to match (was `com.wardrope.app.*`; mismatch caused the 2.1b "error message" — fetchProducts returned 0 products)
-- [ ] Deploy backend (server.py maps now use short IDs)
-- [ ] **Build 11** on EAS with corrected IDs + upload to ASC
+- [x] Deploy backend (server.py maps now use short IDs) — deployed July 5, verified live
+- [x] **Build 12** on EAS with corrected IDs (build 11 was stale — same code as build 10) — uploaded to ASC July 5, submission `50505d4e-ec76-4a54-8992-43c3624260db`
 - [x] 6 subscriptions metadata → "Ready to Submit" (verified in ASC July 2026)
 - [x] 3 consumables metadata filled → "Ready to Submit" (verified in ASC July 2026)
 - [x] IAP review screenshots attached to each product
