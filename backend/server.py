@@ -48,8 +48,8 @@ DB_NAME = os.environ.get("DB_NAME", "wardrobe")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 JWT_SECRET = os.environ.get("JWT_SECRET", "dev_secret")
 JWT_EXPIRES_DAYS = int(os.environ.get("JWT_EXPIRES_DAYS", "30"))
-AI_FAST_MODEL = "claude-3-5-haiku-20241022"   # vision + fast tagging
-AI_SMART_MODEL = "claude-3-5-sonnet-20241022"  # stylist, suggestions, lookbook
+AI_FAST_MODEL = "claude-haiku-4-5"   # vision + fast tagging
+AI_SMART_MODEL = "claude-sonnet-5"   # stylist, suggestions, lookbook
 
 # App URL
 APP_URL = os.environ.get("APP_URL", "https://wardrope-red.vercel.app")
@@ -71,7 +71,9 @@ AWS_ACCESS_KEY_ID = _clean_env("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = _clean_env("AWS_SECRET_ACCESS_KEY")
 S3_BUCKET = _clean_env("S3_BUCKET")
 S3_REGION = _clean_env("S3_REGION", "us-east-1")
-GOOGLE_PLACES_API_KEY = os.environ.get("GOOGLE_PLACES_API_KEY", "")
+# API keys go into HTTP auth headers — a BOM there raises UnicodeEncodeError in httpx.
+ANTHROPIC_API_KEY = _clean_env("ANTHROPIC_API_KEY")
+GOOGLE_PLACES_API_KEY = _clean_env("GOOGLE_PLACES_API_KEY")
 
 # Plan amounts in cents
 PLAN_AMOUNTS_CENTS: Dict[str, int] = {

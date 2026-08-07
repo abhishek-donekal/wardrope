@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as IAP from "expo-iap";
 
 import { api } from "@/src/lib/api";
+import { IAP_ENABLED } from "@/src/lib/featureFlags";
 import { useAuth } from "@/src/contexts/AuthContext";
 import { useResponsive } from "@/src/hooks/use-responsive";
 import { colors, type as type_, space } from "@/src/theme";
@@ -59,6 +60,11 @@ export default function BuyPoints() {
   const pendingResolveRef = useRef<((res: { added: number; balance: number }) => void) | null>(null);
   const pendingRejectRef = useRef<((err: Error) => void) | null>(null);
   const productsReadyRef = useRef<boolean>(false);
+
+  // Purchases disabled on this platform — never render the store.
+  useEffect(() => {
+    if (!IAP_ENABLED) router.replace("/(tabs)/profile");
+  }, [router]);
 
   const [webModalOpen, setWebModalOpen] = useState(false);
   const [webModalPack, setWebModalPack] = useState<Pack | null>(null);
@@ -134,7 +140,7 @@ export default function BuyPoints() {
 
   const loadBalance = useCallback(async () => {
     try {
-      const res = await api<{ user: { points: number } }>("/users/me/profile");
+      const res = await api<{ user: { points: number } }>("/auth/me");
       if (res?.user?.points != null) {
         setBalance(res.user.points);
         if (user) setUser({ ...user, points: res.user.points });

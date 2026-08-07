@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as IAP from "expo-iap";
 
 import { api } from "@/src/lib/api";
+import { IAP_ENABLED } from "@/src/lib/featureFlags";
 import { useAuth } from "@/src/contexts/AuthContext";
 import { colors, type, space } from "@/src/theme";
 
@@ -88,6 +89,11 @@ export default function Subscription() {
   const pendingResolveRef = useRef<(() => void) | null>(null);
   const pendingRejectRef = useRef<((e: Error) => void) | null>(null);
   const productsReadyRef = useRef(false);
+
+  // Purchases disabled on this platform — never render the paywall.
+  useEffect(() => {
+    if (!IAP_ENABLED) router.replace("/(tabs)/profile");
+  }, [router]);
 
   // ----- Apple StoreKit auto-renewable subscriptions (iOS only) -----
   useEffect(() => {
@@ -184,6 +190,7 @@ export default function Subscription() {
           method: "POST",
           body: { plan: selectedPlan, period, addons: selectedAddons },
         });
+        if (!res?.checkout_url) throw new Error("Billing is not yet configured.");
         await Linking.openURL(res.checkout_url);
       }
     } catch (e: any) {
@@ -208,6 +215,7 @@ export default function Subscription() {
         await Linking.openURL("https://apps.apple.com/account/subscriptions");
       } else {
         const res = await api<{ portal_url: string }>("/billing/portal", { method: "POST" });
+        if (!res?.portal_url) throw new Error("Could not open billing portal.");
         await Linking.openURL(res.portal_url);
       }
     } catch (e: any) {

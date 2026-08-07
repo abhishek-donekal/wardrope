@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
 import { api } from "@/src/lib/api";
+import { IAP_ENABLED } from "@/src/lib/featureFlags";
 import { useAuth } from "@/src/contexts/AuthContext";
 import { useTheme } from "@/src/contexts/ThemeContext";
 import { useResponsive } from "@/src/hooks/use-responsive";
@@ -176,8 +177,12 @@ export default function Profile() {
           <Stat label="Items" value={stats.items} />
           <View style={styles.statDivider} />
           <Stat label="Saved looks" value={stats.outfits} />
-          <View style={styles.statDivider} />
-          <Stat label="Plan" value={user?.plan_type === "free" || !user?.plan_type ? "Free" : (user.plan_type.charAt(0).toUpperCase() + user.plan_type.slice(1))} />
+          {IAP_ENABLED && (
+            <>
+              <View style={styles.statDivider} />
+              <Stat label="Plan" value={user?.plan_type === "free" || !user?.plan_type ? "Free" : (user.plan_type.charAt(0).toUpperCase() + user.plan_type.slice(1))} />
+            </>
+          )}
         </View>
 
         {/* Points badge */}
@@ -189,13 +194,15 @@ export default function Profile() {
                 {user.points ?? 0} pts · {pointsLevel(user.points ?? 0)}
               </Text>
             </View>
-            <TouchableOpacity
-              style={styles.buyPtsBtn}
-              onPress={() => router.push("/buy-points")}
-            >
-              <Ionicons name="add-circle-outline" size={14} color={colors.textInverse} />
-              <Text style={styles.buyPtsBtnText}>Buy Points</Text>
-            </TouchableOpacity>
+            {IAP_ENABLED && (
+              <TouchableOpacity
+                style={styles.buyPtsBtn}
+                onPress={() => router.push("/buy-points")}
+              >
+                <Ionicons name="add-circle-outline" size={14} color={colors.textInverse} />
+                <Text style={styles.buyPtsBtnText}>Buy Points</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -329,19 +336,21 @@ export default function Profile() {
             onPress={() => router.push("/referral")}
             testID="profile-row-referral"
           />
-          <Row
-            icon="card-outline"
-            label="Plan & Billing"
-            sub={(() => {
-              const planNames: Record<string, string> = { free: "Free", single: "Single", couples: "Couples", family: "Family" };
-              const name = planNames[user?.plan_type ?? "free"] ?? "Free";
-              if (user?.plan_type === "free") return "Upgrade for full access";
-              const period = user?.plan_period === "annual" ? "· Annual" : "· Monthly";
-              return `${name} ${period}`;
-            })()}
-            onPress={() => router.push("/subscription")}
-            testID="profile-row-billing"
-          />
+          {IAP_ENABLED && (
+            <Row
+              icon="card-outline"
+              label="Plan & Billing"
+              sub={(() => {
+                const planNames: Record<string, string> = { free: "Free", single: "Single", couples: "Couples", family: "Family" };
+                const name = planNames[user?.plan_type ?? "free"] ?? "Free";
+                if (user?.plan_type === "free") return "Upgrade for full access";
+                const period = user?.plan_period === "annual" ? "· Annual" : "· Monthly";
+                return `${name} ${period}`;
+              })()}
+              onPress={() => router.push("/subscription")}
+              testID="profile-row-billing"
+            />
+          )}
           <Row
             icon="chatbubble-outline"
             label="Send feedback"
