@@ -68,8 +68,19 @@ export default function ActivityFeed() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const res = await api<{ events: ActivityEvent[] }>("/activity-feed");
-      setEvents(res.events || []);
+      const res = await api<{ events: any[] }>("/activity-feed");
+      // Backend stores activity_id/event_type with details nested under `data` —
+      // normalize to the flat shape this screen renders.
+      setEvents(
+        (res.events || []).map((e: any): ActivityEvent => ({
+          event_id: e.event_id ?? e.activity_id,
+          type: e.type ?? e.event_type,
+          user_name: e.user_name,
+          created_at: e.created_at,
+          item_name: e.item_name ?? e.data?.item_name,
+          outfit_title: e.outfit_title ?? e.data?.outfit_title,
+        }))
+      );
     } catch (e: any) {
       setError(e?.message || "Could not load activity.");
     } finally {

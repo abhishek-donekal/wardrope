@@ -56,11 +56,13 @@ export default function BarcodeScanner() {
     if (!result?.found) return;
     setAddState("adding");
     try {
-      await api("/items/barcode-add", {
+      const res = await api<{ added?: boolean; reason?: string }>("/items/barcode-add", {
         method: "POST",
         body: { barcode: lastScanned.current },
       });
-      setAddState("done");
+      // Backend returns 200 with {added:false, reason} on lookup rate-limit or
+      // product-not-found — don't show success unless the item actually saved.
+      setAddState(res?.added ? "done" : "error");
     } catch {
       setAddState("error");
     }
