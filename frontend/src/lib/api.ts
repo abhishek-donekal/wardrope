@@ -1,7 +1,7 @@
 import { storage } from "@/src/utils/storage";
 import { DEMO_ITEMS, DEMO_OUTFITS, DEMO_CLOSET } from "@/src/demo/mockData";
 
-const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "https://backend-gamma-gules-79.vercel.app";
+const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "https://backend-abhsiheks-projects-351d4109.vercel.app";
 
 let _demoMode = false;
 export function setDemoMode(active: boolean) { _demoMode = active; }
