@@ -6,10 +6,26 @@
 
 ---
 
+## The company — five subagents
+
+`appreview-director` is the engineering manager: it is dispatched on any review-status change and runs the whole cycle by delegating to the four teams below, enforcing the loop caps and escalation rules in this document. The main session's only jobs are (a) keep the status monitor alive and (b) dispatch the director when it fires.
+
+| Stage | Agent | Owns | Never does |
+|---|---|---|---|
+| — | `appreview-director` | Orchestration, routing, loop caps, escalations, reporting | Writes code; re-does a team's work |
+| 1 | `appreview-analyst` | Read the rejection, reproduce it live, root-cause it | Edits code |
+| 2 | `appreview-implementer` | Fix frontend + backend, deploy backend, commit | Builds or submits |
+| 3 | `appreview-qc` | Adversarially verify; GO / NO-GO | Edits anything |
+| 4 | `appreview-publisher` | EAS build, upload, ASC metadata, Resolution Center reply, submit | Runs on a NO-GO, or edits while a review is in flight |
+
+**NO-GO from stage 3 loops back to stage 2** with QC's blocker list — never to stage 4. Build failures route by kind: code/native error → stage 2; cert/provisioning/service → one retry, then escalate.
+
+Definitions live in `C:\Users\vamsh\.claude\agents\appreview-*.md`.
+
 ## Loop
 
 1. **Detect** — the persistent monitor polls `asc review status --app 6779038156` every 30 min and fires on state change.
-2. **On `REJECTED`** — pull the reviewer's message:
+2. **On `REJECTED`** — dispatch `appreview-analyst`, then follow the pipeline above. Raw commands for reference:
    ```bash
    asc review submissions-list --app 6779038156
    asc review status --app 6779038156 --pretty
