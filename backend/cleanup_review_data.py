@@ -49,6 +49,12 @@ def main() -> int:
         print(f"  {it.get('item_id')} | {it.get('name')} | {it.get('listing_status')} | "
               f"owner {owner.get('name')}{mark}")
 
+    print("\nVirtual SWAP Box (reviewer sees this too — check it reads as real content):")
+    for sb in db.swap_box.find({"status": "available"},
+                               {"_id": 0, "swap_box_id": 1, "item_name": 1, "user_id": 1}):
+        owner = db.users.find_one({"user_id": sb.get("user_id")}, {"_id": 0, "name": 1}) or {}
+        print(f"  {sb.get('swap_box_id')} | {sb.get('item_name')} | owner {owner.get('name')}")
+
     qc_users = [u for u in db.users.find({"email": {"$regex": QC_EMAIL_RE, "$options": "i"}},
                                          {"_id": 0, "user_id": 1, "email": 1})
                 if u["email"].lower() not in KEEP_EMAILS]
