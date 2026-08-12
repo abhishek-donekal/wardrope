@@ -17,6 +17,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { api } from "@/src/lib/api";
+import { ModerationSheet, type ModerationTarget } from "@/src/components/ModerationSheet";
 import { useAuth } from "@/src/contexts/AuthContext";
 import { colors, type, space } from "@/src/theme";
 
@@ -24,6 +25,7 @@ const SWAP_COST = 500; // fallback only — the server sends points_cost (SWAP_C
 
 type ListingItem = {
   item_id: string;
+  user_id: string;
   name: string;
   image_base64: string;
   image_url?: string | null;
@@ -69,6 +71,7 @@ export default function Listings() {
   const [refreshing, setRefreshing] = useState(false);
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [moderationTarget, setModerationTarget] = useState<ModerationTarget | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -238,6 +241,24 @@ export default function Listings() {
                   <Ionicons name="shirt-outline" size={32} color={colors.textSecondary} />
                 </View>
               )}
+              {tab === "community" ? (
+                <TouchableOpacity
+                  style={styles.reportBtn}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  onPress={() =>
+                    setModerationTarget({
+                      type: "listing",
+                      id: item.item_id,
+                      label: item.name || "This listing",
+                      userId: item.user_id,
+                      userName: item.owner_name,
+                    })
+                  }
+                  testID={`listing-report-${item.item_id}`}
+                >
+                  <Ionicons name="flag-outline" size={13} color={colors.textSecondary} />
+                </TouchableOpacity>
+              ) : null}
               <View style={styles.cardInfo}>
                 <View style={[styles.badge, item.listing_status === "donate" ? styles.badgeDonate : styles.badgeSwap]}>
                   <Text style={styles.badgeText}>
@@ -285,6 +306,12 @@ export default function Listings() {
           }}
         />
       )}
+
+      <ModerationSheet
+        target={moderationTarget}
+        onClose={() => setModerationTarget(null)}
+        onDone={load}
+      />
     </SafeAreaView>
   );
 }
@@ -320,6 +347,14 @@ const styles = StyleSheet.create({
   card: { flex: 1, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bgSecondary },
   cardImg: { width: "100%", aspectRatio: 0.85, backgroundColor: colors.bgTertiary },
   cardImgPlaceholder: { alignItems: "center", justifyContent: "center" },
+  reportBtn: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    padding: 6,
+    backgroundColor: colors.overlay,
+    borderRadius: 2,
+  },
   cardInfo: { padding: 10 },
   badge: {
     alignSelf: "flex-start",

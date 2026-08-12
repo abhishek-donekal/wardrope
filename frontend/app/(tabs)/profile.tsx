@@ -392,6 +392,15 @@ export default function Profile() {
           />
           {!isDemoMode && (
             <Row
+              icon="ban-outline"
+              label="Blocked accounts"
+              sub="Accounts you've blocked from your feeds"
+              onPress={() => router.push("/blocked")}
+              testID="profile-row-blocked"
+            />
+          )}
+          {!isDemoMode && (
+            <Row
               icon="log-out-outline"
               label="Sign out"
               onPress={onLogout}

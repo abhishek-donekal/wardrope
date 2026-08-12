@@ -20,12 +20,14 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { api } from "@/src/lib/api";
+import { ModerationSheet, type ModerationTarget } from "@/src/components/ModerationSheet";
 import { useAuth } from "@/src/contexts/AuthContext";
 import { colors, type as type_, space } from "@/src/theme";
 
 type SwapItem = {
   swap_box_id: string;
   item_id?: string;
+  user_id?: string;
   name: string;
   image_url?: string;
   tags?: { category?: string; color?: string };
@@ -66,6 +68,7 @@ export default function SwapBox() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [claimingId, setClaimingId] = useState<string | null>(null);
+  const [moderationTarget, setModerationTarget] = useState<ModerationTarget | null>(null);
 
   // List modal
   const [listModalOpen, setListModalOpen] = useState(false);
@@ -292,6 +295,24 @@ export default function SwapBox() {
                   <Ionicons name="shirt-outline" size={32} color={colors.textSecondary} />
                 </View>
               )}
+              {tab === "browse" ? (
+                <TouchableOpacity
+                  style={styles.reportBtn}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  onPress={() =>
+                    setModerationTarget({
+                      type: "swap_box",
+                      id: item.swap_box_id,
+                      label: itemLabel(item),
+                      userId: item.user_id,
+                      userName: item.owner_name,
+                    })
+                  }
+                  testID={`swapbox-report-${item.swap_box_id}`}
+                >
+                  <Ionicons name="flag-outline" size={13} color={colors.textSecondary} />
+                </TouchableOpacity>
+              ) : null}
               <View style={styles.cardInfo}>
                 {/* Tags */}
                 <View style={styles.tagsRow}>
@@ -339,6 +360,12 @@ export default function SwapBox() {
           )}
         />
       )}
+
+      <ModerationSheet
+        target={moderationTarget}
+        onClose={() => setModerationTarget(null)}
+        onDone={load}
+      />
 
       {/* List an Item Modal */}
       <Modal
@@ -495,6 +522,14 @@ const styles = StyleSheet.create({
   card: { flex: 1, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bgSecondary },
   cardImg: { width: "100%", aspectRatio: 0.85, backgroundColor: colors.bgTertiary },
   cardImgPlaceholder: { alignItems: "center", justifyContent: "center" },
+  reportBtn: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    padding: 6,
+    backgroundColor: colors.overlay,
+    borderRadius: 2,
+  },
   cardInfo: { padding: 10 },
   tagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginBottom: 6 },
   tag: { paddingHorizontal: 6, paddingVertical: 2, backgroundColor: colors.bgTertiary, borderWidth: 1, borderColor: colors.border },

@@ -1047,6 +1047,8 @@ async def delete_account(current=Depends(get_current_user)):
         db.activity_feed.delete_many({"$or": [{"user_id": user_id}, {"to_user_id": user_id}]}),
         db.apple_transactions.delete_many({"user_id": user_id}),
         db.listing_claims.delete_many({"$or": [{"owner_user_id": user_id}, {"claimer_user_id": user_id}]}),
+        db.blocks.delete_many({"$or": [{"blocker_user_id": user_id}, {"blocked_user_id": user_id}]}),
+        db.content_reports.delete_many({"reporter_user_id": user_id}),
     )
     if email:
         await db.verification_codes.delete_many({"target": email})
@@ -1171,98 +1173,105 @@ def _log_empty_completion(label: str, model: str, msg: Any) -> None:
     )
 
 
-async def _claude_text(system: str, user: str, model: str = None, max_tokens: int = 2000) -> str:
+async def _claude_call(label: str, model: str, fallback_model: Optional[str], **kwargs: Any) -> str:
+    """Call Claude and return the text of its answer, or "" if it produced none.
+
+    Anthropic serves 529 `overloaded_error` in bursts, and a burst is indistinguishable
+    to the user from a broken feature. When the primary model is unavailable — or
+    answers with no text at all — retry once on `fallback_model`: a different model is
+    a different capacity pool, which turns an outage into a slightly slower answer.
+    Raises ClaudeUnavailable only when every model failed.
+    """
+    if not ANTHROPIC_API_KEY:
+        raise ClaudeUnavailable("ANTHROPIC_API_KEY is not configured")
+    models = [model] + ([fallback_model] if fallback_model and fallback_model != model else [])
+    last_error: Optional[Exception] = None
+    for attempt, used in enumerate(models):
+        if attempt:
+            logger.warning("%s: %s unavailable, retrying on %s", label, models[0], used)
+        try:
+            cli = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+            msg = await cli.messages.create(model=used, **kwargs)
+        except Exception as e:
+            logger.exception(f"{label} call failed (model={used}): {e}")
+            last_error = e
+            continue
+        text = _message_text(msg)
+        if text:
+            return text
+        _log_empty_completion(label, used, msg)
+    if last_error is not None:
+        raise ClaudeUnavailable(str(last_error)) from last_error
+    return ""
+
+
+async def _claude_text(
+    system: str,
+    user: str,
+    model: str = None,
+    max_tokens: int = 2000,
+    fallback_model: Optional[str] = AI_FAST_MODEL,
+) -> str:
     """Call Claude text API. Returns the model's text, or "" if it produced none.
 
     Raises ClaudeUnavailable when the call fails.
     """
-    used_model = model or AI_SMART_MODEL
-    if not ANTHROPIC_API_KEY:
-        raise ClaudeUnavailable("ANTHROPIC_API_KEY is not configured")
-    try:
-        cli = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
-        kwargs: Dict[str, Any] = {
-            "model": used_model,
-            "max_tokens": max_tokens,
-            "messages": [{"role": "user", "content": user}],
-        }
-        if system:
-            kwargs["system"] = system
-        msg = await cli.messages.create(**kwargs)
-    except Exception as e:
-        logger.exception(f"Claude text call failed (model={used_model}): {e}")
-        raise ClaudeUnavailable(str(e)) from e
-    text = _message_text(msg)
-    if not text:
-        _log_empty_completion("Claude text", used_model, msg)
-    return text
+    kwargs: Dict[str, Any] = {
+        "max_tokens": max_tokens,
+        "messages": [{"role": "user", "content": user}],
+    }
+    if system:
+        kwargs["system"] = system
+    return await _claude_call("Claude text", model or AI_SMART_MODEL, fallback_model, **kwargs)
 
 
 async def _claude_vision(system: str, image_b64: str, text: str, max_tokens: int = 600) -> str:
     """Call Claude with base64 image + text. Raises ClaudeUnavailable when the call fails."""
-    if not ANTHROPIC_API_KEY:
-        raise ClaudeUnavailable("ANTHROPIC_API_KEY is not configured")
-    try:
-        cli = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
-        msg = await cli.messages.create(
-            model=AI_FAST_MODEL,
-            max_tokens=max_tokens,
-            system=system,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/jpeg",
-                            "data": image_b64,
-                        },
+    return await _claude_call(
+        "Claude vision",
+        AI_FAST_MODEL,
+        AI_SMART_MODEL,
+        max_tokens=max_tokens,
+        system=system,
+        messages=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/jpeg",
+                        "data": image_b64,
                     },
-                    {"type": "text", "text": text},
-                ],
-            }],
-        )
-    except Exception as e:
-        logger.exception(f"Claude vision call failed (model={AI_FAST_MODEL}): {e}")
-        raise ClaudeUnavailable(str(e)) from e
-    out = _message_text(msg)
-    if not out:
-        _log_empty_completion("Claude vision", AI_FAST_MODEL, msg)
-    return out
+                },
+                {"type": "text", "text": text},
+            ],
+        }],
+    )
 
 
 async def _claude_vision_url(system: str, image_url: str, text: str, max_tokens: int = 600) -> str:
     """Call Claude with an image URL + text. Raises ClaudeUnavailable when the call fails."""
-    if not ANTHROPIC_API_KEY:
-        raise ClaudeUnavailable("ANTHROPIC_API_KEY is not configured")
-    try:
-        cli = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
-        msg = await cli.messages.create(
-            model=AI_FAST_MODEL,
-            max_tokens=max_tokens,
-            system=system,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "url",
-                            "url": image_url,
-                        },
+    return await _claude_call(
+        "Claude vision URL",
+        AI_FAST_MODEL,
+        AI_SMART_MODEL,
+        max_tokens=max_tokens,
+        system=system,
+        messages=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "url",
+                        "url": image_url,
                     },
-                    {"type": "text", "text": text},
-                ],
-            }],
-        )
-    except Exception as e:
-        logger.exception(f"Claude vision URL call failed (model={AI_FAST_MODEL}): {e}")
-        raise ClaudeUnavailable(str(e)) from e
-    out = _message_text(msg)
-    if not out:
-        _log_empty_completion("Claude vision URL", AI_FAST_MODEL, msg)
-    return out
+                },
+                {"type": "text", "text": text},
+            ],
+        }],
+    )
 
 
 # ---------------------- AI helpers ----------------------
@@ -2133,8 +2142,13 @@ async def my_listings(current=Depends(get_current_user)):
 @api.get("/items/listings/community")
 async def community_listings(current=Depends(get_current_user)):
     """Browse all listings from other users (no images for privacy — just metadata)."""
+    hidden = await _moderation_filters(current["user_id"])
     cursor = db.items.find(
-        {"listing_status": {"$in": ["donate", "swap"]}, "user_id": {"$ne": current["user_id"]}},
+        {
+            "listing_status": {"$in": ["donate", "swap"]},
+            "user_id": {"$nin": [current["user_id"]] + hidden["users"]},
+            "item_id": {"$nin": hidden["listing"]},
+        },
         {"_id": 0, "image_base64": 0},
     ).sort("created_at", -1).limit(100)
     docs = await cursor.to_list(100)
@@ -2800,7 +2814,15 @@ async def swapbox_list(body: SwapBoxListIn, current=Depends(get_current_user)):
 @api.get("/swapbox")
 async def swapbox_browse(current=Depends(get_current_user)):
     user_id = current["user_id"]
-    cursor = db.swap_box.find({"status": "available", "user_id": {"$ne": user_id}}, {"_id": 0}).sort("created_at", -1)
+    hidden = await _moderation_filters(user_id)
+    cursor = db.swap_box.find(
+        {
+            "status": "available",
+            "user_id": {"$nin": [user_id] + hidden["users"]},
+            "swap_box_id": {"$nin": hidden["swap_box"]},
+        },
+        {"_id": 0},
+    ).sort("created_at", -1)
     listings = await cursor.to_list(100)
     return {"items": [swap_listing_to_out(d) for d in listings]}
 
@@ -3240,6 +3262,9 @@ async def friends_send_request(body: FriendRequestIn, current=Depends(get_curren
         raise HTTPException(status_code=404, detail="User not found")
     if target["user_id"] == user_id:
         raise HTTPException(status_code=400, detail="Cannot add yourself")
+    hidden = await _moderation_filters(user_id)
+    if target["user_id"] in hidden["users"]:
+        raise HTTPException(status_code=403, detail="You can't send a request to this account.")
     existing = await db.friends.find_one({
         "$or": [
             {"from_user_id": user_id, "to_user_id": target["user_id"]},
@@ -3264,7 +3289,17 @@ async def friends_send_request(body: FriendRequestIn, current=Depends(get_curren
 @api.get("/friends/requests")
 async def friends_requests(current=Depends(get_current_user)):
     user_id = current["user_id"]
-    cursor = db.friends.find({"$or": [{"from_user_id": user_id}, {"to_user_id": user_id}], "status": "pending"}, {"_id": 0}).sort("created_at", -1)
+    hidden = await _moderation_filters(user_id)
+    cursor = db.friends.find(
+        {
+            "$or": [
+                {"from_user_id": user_id, "to_user_id": {"$nin": hidden["users"]}},
+                {"to_user_id": user_id, "from_user_id": {"$nin": hidden["users"]}},
+            ],
+            "status": "pending",
+        },
+        {"_id": 0},
+    ).sort("created_at", -1)
     requests = await cursor.to_list(50)
     return {"requests": requests}
 
@@ -3342,7 +3377,9 @@ async def activity_feed(current=Depends(get_current_user)):
         friend_ids.append(fid)
     # Friends' public events, plus events addressed to this user (e.g. someone
     # claimed their listing) — a directed event is only ever shown to its target.
-    clauses: List[Dict[str, Any]] = [{"to_user_id": user_id}]
+    hidden = await _moderation_filters(user_id)
+    friend_ids = [f for f in friend_ids if f not in hidden["users"]]
+    clauses: List[Dict[str, Any]] = [{"to_user_id": user_id, "user_id": {"$nin": hidden["users"]}}]
     if friend_ids:
         clauses.append({"user_id": {"$in": friend_ids}, "to_user_id": None})
     events_cursor = db.activity_feed.find({"$or": clauses}, {"_id": 0}).sort("created_at", -1)
@@ -3363,6 +3400,109 @@ async def _record_activity(user_id: str, event_type: str, data: dict, to_user_id
         "data": data,
         "created_at": utcnow(),
     })
+
+
+# ---------------------- Safety: report & block (guideline 1.2) ----------------------
+REPORT_TARGETS = {"listing": ("items", "item_id"), "swap_box": ("swap_box", "swap_box_id"), "user": ("users", "user_id")}
+
+
+class ReportIn(BaseModel):
+    target_type: str  # "listing" | "swap_box" | "user"
+    target_id: str
+    reason: str = ""
+
+
+class BlockIn(BaseModel):
+    user_id: str
+
+
+async def _moderation_filters(user_id: str) -> Dict[str, List[str]]:
+    """Users and content this user should no longer see: anyone either side of a
+    block, plus anything they have reported."""
+    blocks, reports = await asyncio.gather(
+        db.blocks.find(
+            {"$or": [{"blocker_user_id": user_id}, {"blocked_user_id": user_id}]}, {"_id": 0}
+        ).to_list(500),
+        db.content_reports.find(
+            {"reporter_user_id": user_id}, {"_id": 0, "target_type": 1, "target_id": 1}
+        ).to_list(500),
+    )
+    hidden_users = set()
+    for b in blocks:
+        hidden_users.add(b["blocked_user_id"] if b["blocker_user_id"] == user_id else b["blocker_user_id"])
+    return {
+        "users": list(hidden_users),
+        "listing": [r["target_id"] for r in reports if r.get("target_type") == "listing"],
+        "swap_box": [r["target_id"] for r in reports if r.get("target_type") == "swap_box"],
+    }
+
+
+@api.post("/report")
+async def report_content(body: ReportIn, current=Depends(get_current_user)):
+    """Report objectionable content or an abusive account. The reported content is
+    hidden from the reporter immediately and kept for review."""
+    if body.target_type not in REPORT_TARGETS:
+        raise HTTPException(status_code=400, detail="Unknown report target")
+    collection, key = REPORT_TARGETS[body.target_type]
+    doc = await db[collection].find_one({key: body.target_id}, {"_id": 0, "user_id": 1})
+    if not doc:
+        raise HTTPException(status_code=404, detail="That content no longer exists.")
+    reported_user_id = body.target_id if body.target_type == "user" else doc.get("user_id")
+    if reported_user_id == current["user_id"]:
+        raise HTTPException(status_code=400, detail="You can't report your own content.")
+    report_id = "rpt_" + uuid.uuid4().hex[:16]
+    await db.content_reports.insert_one({
+        "report_id": report_id,
+        "reporter_user_id": current["user_id"],
+        "reported_user_id": reported_user_id,
+        "target_type": body.target_type,
+        "target_id": body.target_id,
+        "reason": (body.reason or "").strip()[:500],
+        "status": "open",
+        "created_at": utcnow(),
+    })
+    logger.info(f"Content reported: {body.target_type}={body.target_id} by user={current['user_id']}")
+    return {"ok": True, "report_id": report_id}
+
+
+@api.post("/blocks")
+async def block_user(body: BlockIn, current=Depends(get_current_user)):
+    """Block an account: neither side sees the other's listings, Swap Box entries
+    or activity, and friend requests between them are refused."""
+    user_id = current["user_id"]
+    if body.user_id == user_id:
+        raise HTTPException(status_code=400, detail="You can't block yourself.")
+    target = await db.users.find_one({"user_id": body.user_id}, {"_id": 0, "name": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="That account no longer exists.")
+    blocked_name = ((target.get("name") or "").split() or ["Someone"])[0]
+    await db.blocks.update_one(
+        {"blocker_user_id": user_id, "blocked_user_id": body.user_id},
+        {"$set": {"blocked_name": blocked_name}, "$setOnInsert": {"created_at": utcnow()}},
+        upsert=True,
+    )
+    await db.friends.delete_many({
+        "$or": [
+            {"from_user_id": user_id, "to_user_id": body.user_id},
+            {"from_user_id": body.user_id, "to_user_id": user_id},
+        ]
+    })
+    return {"ok": True, "blocked_name": blocked_name}
+
+
+@api.get("/blocks")
+async def list_blocks(current=Depends(get_current_user)):
+    cursor = db.blocks.find({"blocker_user_id": current["user_id"]}, {"_id": 0}).sort("created_at", -1)
+    docs = await cursor.to_list(200)
+    return {"blocked": [{"user_id": d["blocked_user_id"], "name": d.get("blocked_name") or "Someone"} for d in docs]}
+
+
+@api.delete("/blocks/{blocked_user_id}")
+async def unblock_user(blocked_user_id: str, current=Depends(get_current_user)):
+    res = await db.blocks.delete_one({"blocker_user_id": current["user_id"], "blocked_user_id": blocked_user_id})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="That account isn't blocked.")
+    return {"ok": True}
 
 
 # ---------------------- Admin / Migration ----------------------
@@ -3450,6 +3590,10 @@ async def startup():
         await db.friends.create_index([("from_user_id", 1), ("to_user_id", 1)])
         await db.listing_claims.create_index("item_id")
         await db.listing_claims.create_index([("claimer_user_id", 1), ("created_at", -1)])
+        await db.blocks.create_index([("blocker_user_id", 1), ("blocked_user_id", 1)], unique=True)
+        await db.blocks.create_index("blocked_user_id")
+        await db.content_reports.create_index([("reporter_user_id", 1), ("created_at", -1)])
+        await db.content_reports.create_index([("status", 1), ("created_at", -1)])
         await db.service_bookings.create_index([("user_id", 1), ("created_at", -1)])
         await db.activity_feed.create_index([("user_id", 1), ("created_at", -1)])
         logger.info("Wardrobe API ready")

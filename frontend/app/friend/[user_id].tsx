@@ -13,6 +13,7 @@ import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { api } from "@/src/lib/api";
+import { ModerationSheet, type ModerationTarget } from "@/src/components/ModerationSheet";
 import { colors, type as type_, space } from "@/src/theme";
 
 type SharedCloset = {
@@ -58,6 +59,7 @@ export default function FriendProfile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [moderationTarget, setModerationTarget] = useState<ModerationTarget | null>(null);
 
   const load = useCallback(async () => {
     if (!user_id) return;
@@ -95,7 +97,24 @@ export default function FriendProfile() {
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[type_.overline, { color: colors.text }]}>Friend Profile</Text>
-        <View style={{ width: 24 }} />
+        {profile ? (
+          <TouchableOpacity
+            onPress={() =>
+              setModerationTarget({
+                type: "user",
+                id: profile.user_id,
+                label: profile.name,
+                userId: profile.user_id,
+                userName: profile.name,
+              })
+            }
+            testID="friend-report-btn"
+          >
+            <Ionicons name="flag-outline" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 24 }} />
+        )}
       </View>
 
       {loading ? (
@@ -176,6 +195,16 @@ export default function FriendProfile() {
           )}
         </ScrollView>
       )}
+
+      <ModerationSheet
+        target={moderationTarget}
+        onClose={() => setModerationTarget(null)}
+        onDone={(action) => {
+          // Blocking removes the friendship, so this profile no longer exists for them.
+          if (action === "block") router.back();
+          else load();
+        }}
+      />
     </SafeAreaView>
   );
 }
