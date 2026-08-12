@@ -48,6 +48,7 @@ export default function Listings() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [claimingId, setClaimingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -57,7 +58,10 @@ export default function Listings() {
       ]);
       setMine(myRes.items || []);
       setCommunity(comRes.items || []);
-    } catch {}
+      setError(null);
+    } catch (e: any) {
+      setError(e?.message || "Couldn't load listings. Check your connection and try again.");
+    }
     setLoading(false);
     setRefreshing(false);
   }, []);
@@ -162,6 +166,18 @@ export default function Listings() {
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.accent} />
+        </View>
+      ) : error && data.length === 0 ? (
+        <View style={styles.center} testID="listings-error">
+          <Ionicons name="alert-circle-outline" size={48} color={colors.accent} />
+          <Text style={[type.body, { marginTop: space.md, textAlign: "center" }]}>{error}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={onRefresh} disabled={refreshing}>
+            {refreshing ? (
+              <ActivityIndicator size="small" color={colors.accent} />
+            ) : (
+              <Text style={styles.retryBtnText}>Try again</Text>
+            )}
+          </TouchableOpacity>
         </View>
       ) : data.length === 0 ? (
         <View style={styles.center}>
@@ -304,4 +320,13 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   goClosetText: { color: colors.accent, fontSize: 14, fontWeight: "600" },
+  retryBtn: {
+    marginTop: space.lg,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 2,
+  },
+  retryBtnText: { color: colors.text, fontSize: 13, letterSpacing: 0.5 },
 });

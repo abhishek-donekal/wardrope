@@ -15,7 +15,7 @@ Every source photo below was opened and visually confirmed to show the garment i
 claims (2026-08-12). If a source rots the script fails loudly instead of seeding a
 grey box — that is exactly how the closet ended up full of placehold.co images.
 
-Usage:
+Usage (WARDROBE_DEMO_PASSWORD must hold the demo account password):
     python seed_review_account.py            # seed / repair
     python seed_review_account.py --verify   # report only, change nothing
 """
@@ -26,8 +26,11 @@ import httpx
 
 API = os.environ.get("WARDROPE_API", "https://backend-gamma-gules-79.vercel.app").rstrip("/")
 EMAIL = os.environ.get("WARDROBE_DEMO_EMAIL", "applereview@wardrobe-demo.com")
-PASSWORD = os.environ.get("WARDROBE_DEMO_PASSWORD", "Review2026!Wardrobe")
+PASSWORD = os.environ.get("WARDROBE_DEMO_PASSWORD", "")
 DISPLAY_NAME = "Apple Review"
+
+if not PASSWORD:
+    sys.exit("Set WARDROBE_DEMO_PASSWORD to the demo account password before running.")
 
 MIN_PHOTO_BYTES = 20_000
 PLACEHOLDER_HOSTS = ("placehold.co", "placeholder.com", "via.placeholder", "dummyimage.com")

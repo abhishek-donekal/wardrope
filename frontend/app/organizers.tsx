@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { api } from "@/src/lib/api";
+import { SERVICES_DIRECTORY_ENABLED } from "@/src/lib/featureFlags";
 import { colors, type as type_, space } from "@/src/theme";
 
 type Organizer = {
@@ -52,6 +53,14 @@ function StarRating({ rating }: { rating?: number }) {
 
 export default function Organizers() {
   const router = useRouter();
+
+  // Places lookup is unconfigured — never render an empty directory, even if the
+  // route is opened directly. (Module constant, so hook order stays stable.)
+  useEffect(() => {
+    if (!SERVICES_DIRECTORY_ENABLED) router.replace("/(tabs)/profile");
+  }, [router]);
+  if (!SERVICES_DIRECTORY_ENABLED) return null;
+
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [results, setResults] = useState<Organizer[]>([]);

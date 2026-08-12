@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Alert,
   View,
   Text,
   TouchableOpacity,
@@ -16,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { useAuth } from "@/src/contexts/AuthContext";
 import { api } from "@/src/lib/api";
+import { BRAND_ID_ENABLED } from "@/src/lib/featureFlags";
 import { colors, type, space } from "@/src/theme";
 
 const GENDERS = ["Female", "Male", "Non-binary", "Prefer not to say"];
@@ -34,6 +36,11 @@ const FIDELITY = [
   { id: "descriptive", title: "Descriptive", subtitle: "Fast tagging. No external lookups." },
   { id: "identified", title: "Identified", subtitle: "Brand + product lookup when confident." },
 ];
+
+// The fidelity step only offers a real choice once brand identification is live;
+// until then onboarding ends at the style step.
+const STEPS = BRAND_ID_ENABLED ? 5 : 4;
+const LAST_STEP = STEPS - 1;
 
 export default function Onboarding() {
   const { user, setUser } = useAuth();
@@ -83,13 +90,18 @@ export default function Onboarding() {
       });
       setUser(res.user);
       router.replace("/(tabs)/closet");
-    } catch (e) {
-      // keep simple — show in alert
+    } catch (e: any) {
+      const msg = e?.message || "Could not save your preferences. Please try again.";
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.alert(msg);
+      } else {
+        Alert.alert("Something went wrong", msg);
+      }
       setBusy(false);
     }
   };
 
-  const next = () => setStep((s) => Math.min(s + 1, 4));
+  const next = () => setStep((s) => Math.min(s + 1, LAST_STEP));
   const back = () => (step === 0 ? router.back() : setStep((s) => s - 1));
 
   return (
@@ -100,7 +112,7 @@ export default function Onboarding() {
             <Ionicons name="chevron-back" size={24} color={colors.text} />
           </TouchableOpacity>
           <View style={styles.progressRow}>
-            {[0, 1, 2, 3, 4].map((i) => (
+            {Array.from({ length: STEPS }, (_, i) => i).map((i) => (
               <View
                 key={i}
                 style={[styles.progressDot, { backgroundColor: i <= step ? colors.accent : colors.border }]}
@@ -111,7 +123,7 @@ export default function Onboarding() {
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <Text style={type.overline}>Step {step + 1} of 5</Text>
+          <Text style={type.overline}>Step {step + 1} of {STEPS}</Text>
 
           {step === 0 && (
             <View>
@@ -200,7 +212,7 @@ export default function Onboarding() {
             </View>
           )}
 
-          {step === 4 && (
+          {BRAND_ID_ENABLED && step === 4 && (
             <View>
               <Text style={[type.h2, styles.title]}>Cataloging{"\n"}fidelity</Text>
               <Text style={[type.bodySm, styles.sub]}>Choose how detailed your item info is. Switch later anytime.</Text>
@@ -218,11 +230,6 @@ export default function Onboarding() {
                         {f.title}
                       </Text>
                       <Text style={[type.bodySm, { marginTop: 4 }]}>{f.subtitle}</Text>
-                      {f.id === "identified" ? (
-                        <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 6 }}>
-                          Coming soon · brand lookup
-                        </Text>
-                      ) : null}
                     </View>
                     {active ? <Ionicons name="checkmark-circle" size={22} color={colors.accent} /> : null}
                   </TouchableOpacity>
@@ -233,7 +240,7 @@ export default function Onboarding() {
         </ScrollView>
 
         <View style={styles.footer}>
-          {step < 4 ? (
+          {step < LAST_STEP ? (
             <TouchableOpacity testID="onboarding-next-btn" style={styles.primaryBtn} onPress={next}>
               <Text style={styles.primaryBtnText}>Continue</Text>
             </TouchableOpacity>

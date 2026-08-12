@@ -50,8 +50,8 @@
 ## YOUR STEPS in App Store Connect (in order)
 
 ### 1. Version page cleanup (critical — this caused rejection #3)
-- Apps → Wardrope → iOS App 1.0 → **In-App Purchases section: REMOVE all attached IAPs** (all 9 if attached). A free submission must have ZERO IAPs attached.
-- Leave the 9 products themselves alone in the IAP/Subscriptions sections (don't delete — they're for later).
+- Apps → Wardrope → iOS App 1.0 → **In-App Purchases section: confirm ZERO IAPs are attached** (nothing is attached as of 2026-08-12; remove any that reappear). A free submission must have no IAPs attached.
+- Leave the 6 subscription products themselves alone in the Subscriptions section (don't delete — they're for later).
 
 ### 2. Swap the build
 - Version page → Build section → remove build 10 → **select build 17** (wait ~10 min after upload email for processing). NOT 9–16 — only 17 has the free-version flag.
@@ -105,4 +105,4 @@ Thank you for your time and guidance.
 ## After approval (future update — do NOT do now)
 1. Resolve Paid Apps Agreement (W-8BEN path on this account, or the RKD org account — see ORG-MIGRATION-RUNBOOK.md).
 2. Flip `IAP_ENABLED` (remove the iOS gate in `frontend/src/lib/featureFlags.ts`), new build.
-3. Attach the 9 IAPs to that version, submit together (per RESUBMIT-CHECKLIST.md).
+3. Attach the 6 subscriptions to that version, submit together (per RESUBMIT-CHECKLIST.md).

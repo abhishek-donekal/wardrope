@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Platform, Alert } from "react-native";
 import {
   View,
@@ -10,10 +11,17 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
+import { VLOG_ENABLED } from "@/src/lib/featureFlags";
 import { colors, type, space } from "@/src/theme";
 
 export default function Vlog() {
   const router = useRouter();
+
+  // No videos yet — never render the teaser, even if the route is opened directly.
+  useEffect(() => {
+    if (!VLOG_ENABLED) router.replace("/(tabs)/profile");
+  }, [router]);
+  if (!VLOG_ENABLED) return null;
 
   const notifyMe = () => {
     if (Platform.OS === "web" && typeof window !== "undefined") {

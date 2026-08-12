@@ -16,3 +16,9 @@ export const SERVICES_DIRECTORY_ENABLED = false;
 // The vlog screen is a static "Coming soon" teaser — placeholder content that
 // App Review rejects under guideline 2.1. Hide until real content exists.
 export const VLOG_ENABLED = false;
+
+// "Identified" cataloguing fidelity (brand + product lookup) is still mocked on
+// the backend — it stores no brand or product, so every surface offering it is a
+// promise the app does not keep, which App Review rejects under guideline 2.1.
+// Re-enable once a real brand-recognition provider is wired into item creation.
+export const BRAND_ID_ENABLED = false;

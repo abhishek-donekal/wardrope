@@ -15,7 +15,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
 import { api } from "@/src/lib/api";
-import { IAP_ENABLED, SERVICES_DIRECTORY_ENABLED, VLOG_ENABLED } from "@/src/lib/featureFlags";
+import {
+  BRAND_ID_ENABLED,
+  IAP_ENABLED,
+  SERVICES_DIRECTORY_ENABLED,
+  VLOG_ENABLED,
+} from "@/src/lib/featureFlags";
 import { useAuth } from "@/src/contexts/AuthContext";
 import { useTheme } from "@/src/contexts/ThemeContext";
 import { useResponsive } from "@/src/hooks/use-responsive";
@@ -64,7 +69,14 @@ export default function Profile() {
         body: { fidelity_mode: next },
       });
       setUser(res.user);
-    } catch {}
+    } catch (e: any) {
+      const msg = e?.message || "Could not change cataloguing fidelity. Please try again.";
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.alert(msg);
+      } else {
+        Alert.alert("Error", msg);
+      }
+    }
   };
 
   const onLogout = async () => {
@@ -291,19 +303,35 @@ export default function Profile() {
             onPress={() => router.push("/manage-categories")}
             testID="profile-row-categories"
           />
-          <Row
-            icon="options-outline"
-            label="Brand identification"
-            sub="Coming soon — AI brand recognition"
-            onPress={() => {}}
-            testID="profile-row-fidelity"
-            chevron={false}
-            trailing={
-              <View style={styles.comingSoonBadge}>
-                <Text style={styles.comingSoonText}>Soon</Text>
-              </View>
-            }
-          />
+          {BRAND_ID_ENABLED && (
+            <Row
+              icon="options-outline"
+              label="Brand identification"
+              sub={
+                user?.fidelity_mode === "identified"
+                  ? "New items get a brand and product lookup"
+                  : "Fast tagging, no brand lookup"
+              }
+              onPress={toggleFidelity}
+              testID="profile-row-fidelity"
+              chevron={false}
+              trailing={
+                <View
+                  style={[
+                    styles.toggle,
+                    user?.fidelity_mode === "identified" && styles.toggleOn,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.toggleKnob,
+                      { left: user?.fidelity_mode === "identified" ? 22 : 2 },
+                    ]}
+                  />
+                </View>
+              }
+            />
+          )}
         </Section>
 
         {SERVICES_DIRECTORY_ENABLED && (
@@ -509,13 +537,6 @@ const styles = StyleSheet.create({
   },
   demoBannerBtnText: { color: colors.textInverse, fontWeight: "700", fontSize: 14 },
   footer: { color: colors.textSecondary, textAlign: "center", marginTop: space.xxl, fontSize: 11 },
-  comingSoonBadge: {
-    backgroundColor: colors.border,
-    borderRadius: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  comingSoonText: { color: colors.textSecondary, fontSize: 11, fontWeight: "600", letterSpacing: 0.5 },
   pointsRowWrap: {
     flexDirection: "row",
     alignItems: "center",
