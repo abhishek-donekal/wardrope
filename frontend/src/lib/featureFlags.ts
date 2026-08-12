@@ -22,3 +22,9 @@ export const VLOG_ENABLED = false;
 // promise the app does not keep, which App Review rejects under guideline 2.1.
 // Re-enable once a real brand-recognition provider is wired into item creation.
 export const BRAND_ID_ENABLED = false;
+
+// Closet sharing was never finished: `is_shared` is read by the friend-profile
+// endpoint but no API or screen can ever set it, so "Shared Closets" is empty
+// for every user forever. Hide the section until sharing actually ships, rather
+// than showing a permanently empty promise (guideline 2.1).
+export const SHARED_CLOSETS_ENABLED = false;

@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { api } from "@/src/lib/api";
 import { ModerationSheet, type ModerationTarget } from "@/src/components/ModerationSheet";
+import { SHARED_CLOSETS_ENABLED } from "@/src/lib/featureFlags";
 import { colors, type as type_, space } from "@/src/theme";
 
 type SharedCloset = {
@@ -155,23 +156,26 @@ export default function FriendProfile() {
             </View>
           </View>
 
-          {/* Shared Closets */}
-          <Text style={[type_.overline, { marginBottom: space.sm, marginTop: space.xl }]}>Shared Closets</Text>
-          {(profile.shared_closets ?? []).length === 0 ? (
-            <View style={styles.emptySection}>
-              <Ionicons name="albums-outline" size={28} color={colors.textSecondary} />
-              <Text style={styles.emptyText}>No shared closets yet.</Text>
-            </View>
-          ) : (
-            <View style={styles.section}>
-              {(profile.shared_closets ?? []).map((cl) => (
-                <View key={cl.closet_id} style={styles.sectionRow}>
-                  <Ionicons name="albums-outline" size={18} color={colors.accent} />
-                  <Text style={styles.sectionRowText}>{cl.name}</Text>
+          {SHARED_CLOSETS_ENABLED ? (
+            <>
+              <Text style={[type_.overline, { marginBottom: space.sm, marginTop: space.xl }]}>Shared Closets</Text>
+              {(profile.shared_closets ?? []).length === 0 ? (
+                <View style={styles.emptySection}>
+                  <Ionicons name="albums-outline" size={28} color={colors.textSecondary} />
+                  <Text style={styles.emptyText}>No shared closets yet.</Text>
                 </View>
-              ))}
-            </View>
-          )}
+              ) : (
+                <View style={styles.section}>
+                  {(profile.shared_closets ?? []).map((cl) => (
+                    <View key={cl.closet_id} style={styles.sectionRow}>
+                      <Ionicons name="albums-outline" size={18} color={colors.accent} />
+                      <Text style={styles.sectionRowText}>{cl.name}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </>
+          ) : null}
 
           {/* Their Looks */}
           <Text style={[type_.overline, { marginBottom: space.sm, marginTop: space.xl }]}>Their Looks</Text>
