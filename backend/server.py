@@ -2758,6 +2758,7 @@ class SwapBoxListIn(BaseModel):
     description: str = ""
     points_cost: int = 200
 
+
 def swap_listing_to_out(d: Dict[str, Any]) -> Dict[str, Any]:
     """Serialize a swap_box document for clients.
 
