@@ -20,7 +20,7 @@ import { api } from "@/src/lib/api";
 import { useAuth } from "@/src/contexts/AuthContext";
 import { colors, type, space } from "@/src/theme";
 
-const SWAP_COST = 500; // points to claim a swap item
+const SWAP_COST = 500; // fallback only — the server sends points_cost (SWAP_CLAIM_COST)
 
 type ListingItem = {
   item_id: string;
@@ -31,7 +31,27 @@ type ListingItem = {
   listing_status: string;
   brand?: string | null;
   owner_name?: string;
+  points_cost?: number;
+  listing_claimed?: boolean;
+  claimed_by_me?: boolean;
+  claimed_by_name?: string | null;
 };
+
+type ClaimResponse = {
+  name: string;
+  owner_name: string;
+  points_spent: number;
+  points_remaining: number;
+};
+
+function listingLabel(item: ListingItem): string {
+  return item.name?.trim() || "this item";
+}
+
+function claimCost(item: ListingItem): number {
+  if (item.listing_status === "donate") return 0;
+  return item.points_cost ?? SWAP_COST;
+}
 
 /** Items uploaded to S3 carry image_url and no base64; the community view carries neither. */
 function listingImageUri(it: ListingItem): string | undefined {
@@ -70,36 +90,38 @@ export default function Listings() {
 
   const onRefresh = () => { setRefreshing(true); load(); };
 
+  const notify = (title: string, msg: string) => {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      window.alert(msg);
+    } else {
+      Alert.alert(title, msg);
+    }
+  };
+
   const claimItem = async (item: ListingItem) => {
     const isDonate = item.listing_status === "donate";
-    const pts = isDonate ? 0 : SWAP_COST;
+    const pts = claimCost(item);
     const userPts = user?.points ?? 0;
 
-    const doRedeem = async () => {
+    const doClaim = async () => {
       setClaimingId(item.item_id);
       try {
-        if (!isDonate) {
-          const res = await api<{ points_remaining: number }>("/points/redeem", {
-            method: "POST",
-            body: { amount: pts, reason: "swap_claim" },
-          });
-          if (user) setUser({ ...user, points: res.points_remaining });
-        }
-        const successMsg = isDonate
-          ? "Item claimed! Contact the owner to arrange pickup."
-          : `Swap claimed! ${pts} pts deducted. Contact the owner to arrange the swap.`;
-        if (Platform.OS === "web" && typeof window !== "undefined") {
-          window.alert(successMsg);
-        } else {
-          Alert.alert("Claimed!", successMsg);
-        }
+        const res = await api<ClaimResponse>(`/items/listings/${item.item_id}/claim`, {
+          method: "POST",
+        });
+        if (user) setUser({ ...user, points: res.points_remaining });
+        // Re-read from the server so the card shows the state that was actually saved.
+        await load();
+        const spent = res.points_spent ? `${res.points_spent} pts were deducted. ` : "";
+        notify(
+          "Claimed",
+          `You claimed "${res.name || listingLabel(item)}". ${spent}${res.owner_name} has been ` +
+            `notified and will see your claim in their activity feed.`
+        );
       } catch (e: any) {
-        const msg = e?.message || "Could not complete claim.";
-        if (Platform.OS === "web" && typeof window !== "undefined") {
-          window.alert(msg);
-        } else {
-          Alert.alert("Error", msg);
-        }
+        // A failed claim changes nothing server-side — reload so the card is accurate.
+        await load();
+        notify("Could not claim", e?.message || "Could not complete claim. Please try again.");
       } finally {
         setClaimingId(null);
       }
@@ -107,29 +129,24 @@ export default function Listings() {
 
     if (isDonate) {
       if (Platform.OS === "web" && typeof window !== "undefined") {
-        if (window.confirm(`Claim "${item.name || "this item"}" for free?`)) doRedeem();
+        if (window.confirm(`Claim "${listingLabel(item)}" for free?`)) doClaim();
       } else {
-        Alert.alert("Claim this item?", `"${item.name || "Item"}" is free to claim.`, [
+        Alert.alert("Claim this item?", `"${listingLabel(item)}" is free to claim.`, [
           { text: "Cancel", style: "cancel" },
-          { text: "Claim", onPress: doRedeem },
+          { text: "Claim", onPress: doClaim },
         ]);
       }
     } else {
-      if (userPts < SWAP_COST) {
-        const msg = `You need ${SWAP_COST} pts to claim this swap. You have ${userPts} pts.`;
-        if (Platform.OS === "web" && typeof window !== "undefined") {
-          window.alert(msg);
-        } else {
-          Alert.alert("Not enough points", msg);
-        }
+      if (userPts < pts) {
+        notify("Not enough points", `You need ${pts} pts to claim this swap. You have ${userPts} pts.`);
         return;
       }
       if (Platform.OS === "web" && typeof window !== "undefined") {
-        if (window.confirm(`Use ${SWAP_COST} pts to claim "${item.name || "this item"}"? You have ${userPts} pts.`)) doRedeem();
+        if (window.confirm(`Use ${pts} pts to claim "${listingLabel(item)}"? You have ${userPts} pts.`)) doClaim();
       } else {
-        Alert.alert("Use points to swap?", `Use ${SWAP_COST} pts to claim "${item.name || "Item"}"?\nYou have ${userPts} pts.`, [
+        Alert.alert("Use points to swap?", `Use ${pts} pts to claim "${listingLabel(item)}"?\nYou have ${userPts} pts.`, [
           { text: "Cancel", style: "cancel" },
-          { text: `Use ${SWAP_COST} pts`, onPress: doRedeem },
+          { text: `Use ${pts} pts`, onPress: doClaim },
         ]);
       }
     }
@@ -232,17 +249,32 @@ export default function Listings() {
                 {tab === "community" && item.owner_name ? (
                   <Text style={styles.cardOwner}>{item.owner_name}</Text>
                 ) : null}
+                {tab === "mine" && item.listing_claimed ? (
+                  <Text style={styles.cardClaimed} numberOfLines={1}>
+                    {item.claimed_by_name ? `Claimed by ${item.claimed_by_name}` : "Claimed"}
+                  </Text>
+                ) : null}
                 {tab === "community" ? (
                   <TouchableOpacity
-                    style={[styles.claimBtn, item.listing_status === "donate" && styles.claimBtnFree]}
+                    style={[
+                      styles.claimBtn,
+                      item.listing_status === "donate" && styles.claimBtnFree,
+                      item.listing_claimed && styles.claimBtnDone,
+                    ]}
                     onPress={() => claimItem(item)}
-                    disabled={claimingId === item.item_id}
+                    disabled={claimingId === item.item_id || !!item.listing_claimed}
                   >
                     {claimingId === item.item_id ? (
                       <ActivityIndicator size="small" color={colors.textInverse} />
                     ) : (
-                      <Text style={styles.claimBtnText}>
-                        {item.listing_status === "donate" ? "Claim free" : `${SWAP_COST} pts`}
+                      <Text style={[styles.claimBtnText, item.listing_claimed && styles.claimBtnDoneText]}>
+                        {item.listing_claimed
+                          ? item.claimed_by_me
+                            ? "Claimed by you"
+                            : "Claimed"
+                          : item.listing_status === "donate"
+                            ? "Claim free"
+                            : `${claimCost(item)} pts`}
                       </Text>
                     )}
                   </TouchableOpacity>
@@ -302,6 +334,7 @@ const styles = StyleSheet.create({
   cardName: { color: colors.text, fontSize: 13, fontWeight: "600" },
   cardBrand: { color: colors.accent, fontSize: 11, marginTop: 2 },
   cardOwner: { color: colors.textSecondary, fontSize: 11, marginTop: 2 },
+  cardClaimed: { color: colors.accent, fontSize: 11, marginTop: 4, fontWeight: "600" },
   claimBtn: {
     marginTop: 8,
     backgroundColor: colors.accent,
@@ -310,7 +343,9 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   claimBtnFree: { backgroundColor: "rgba(197,160,89,0.6)" },
+  claimBtnDone: { backgroundColor: colors.bgTertiary, borderWidth: 1, borderColor: colors.border },
   claimBtnText: { color: colors.textInverse, fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
+  claimBtnDoneText: { color: colors.textSecondary },
   goClosetBtn: {
     marginTop: space.lg,
     paddingVertical: 12,

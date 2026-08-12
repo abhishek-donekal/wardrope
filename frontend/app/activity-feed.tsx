@@ -17,7 +17,7 @@ import { colors, type as type_, space } from "@/src/theme";
 
 type ActivityEvent = {
   event_id: string;
-  type: "item_added" | "outfit_saved" | "swap_listed" | string;
+  type: "item_added" | "outfit_saved" | "swap_listed" | "listing_claimed" | "swap_claimed" | string;
   user_name: string;
   user_id?: string;
   item_name?: string;
@@ -41,6 +41,8 @@ function eventIcon(type: string): { name: any; color: string } {
     case "item_added": return { name: "shirt-outline", color: colors.accent };
     case "outfit_saved": return { name: "images-outline", color: "#7BA7BC" };
     case "swap_listed": return { name: "swap-horizontal-outline", color: "#A0C878" };
+    case "listing_claimed":
+    case "swap_claimed": return { name: "hand-left-outline", color: colors.accent };
     default: return { name: "ellipse-outline", color: colors.textSecondary };
   }
 }
@@ -53,6 +55,10 @@ function eventText(event: ActivityEvent): string {
       return `${event.user_name} saved a new look${event.outfit_title ? ` · "${event.outfit_title}"` : ""}`;
     case "swap_listed":
       return `${event.user_name} listed something in the Swap Box`;
+    case "listing_claimed":
+      return `${event.user_name} claimed your listing${event.item_name ? ` · ${event.item_name}` : ""}`;
+    case "swap_claimed":
+      return `${event.user_name} claimed your Swap Box item${event.item_name ? ` · ${event.item_name}` : ""}`;
     default:
       return `${event.user_name} did something`;
   }

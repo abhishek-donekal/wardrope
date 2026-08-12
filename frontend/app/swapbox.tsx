@@ -43,6 +43,11 @@ type ClosetItem = {
   tags?: { category?: string; color?: string };
 };
 
+/** A Swap Box entry is named after the closet item it was listed from. */
+function itemLabel(item: SwapItem): string {
+  return item.name?.trim() || "Untitled item";
+}
+
 function timeToast(msg: string) {
   if (Platform.OS === "web" && typeof window !== "undefined") {
     window.alert(msg);
@@ -106,13 +111,17 @@ export default function SwapBox() {
     const dolaim = async () => {
       setClaimingId(item.swap_box_id);
       try {
-        const res = await api<{ points_remaining?: number }>(`/swapbox/${item.swap_box_id}/claim`, {
-          method: "POST",
-        });
+        const res = await api<{ points_remaining?: number; owner_name?: string }>(
+          `/swapbox/${item.swap_box_id}/claim`,
+          { method: "POST" }
+        );
         if (user && res.points_remaining != null) {
           setUser({ ...user, points: res.points_remaining });
         }
-        timeToast(`Claimed! ${pts} pts deducted. Contact the owner to arrange pickup.`);
+        const owner = res.owner_name || item.owner_name || "The owner";
+        timeToast(
+          `Claimed "${itemLabel(item)}" for ${pts} pts. ${owner} has been notified and will see it in their activity feed.`
+        );
         load();
       } catch (e: any) {
         const msg = e?.message || "Could not complete claim.";
@@ -127,9 +136,9 @@ export default function SwapBox() {
     };
 
     if (Platform.OS === "web" && typeof window !== "undefined") {
-      if (window.confirm(`Use ${pts} pts to claim "${item.name}"?`)) dolaim();
+      if (window.confirm(`Use ${pts} pts to claim "${itemLabel(item)}"?`)) dolaim();
     } else {
-      Alert.alert("Claim this item?", `Use ${pts} pts to claim "${item.name}"?\nYou have ${userPts} pts.`, [
+      Alert.alert("Claim this item?", `Use ${pts} pts to claim "${itemLabel(item)}"?\nYou have ${userPts} pts.`, [
         { text: "Cancel", style: "cancel" },
         { text: `Use ${pts} pts`, onPress: dolaim },
       ]);
@@ -146,9 +155,9 @@ export default function SwapBox() {
       }
     };
     if (Platform.OS === "web" && typeof window !== "undefined") {
-      if (window.confirm(`Remove "${item.name}" from the Swap Box?`)) doDelete();
+      if (window.confirm(`Remove "${itemLabel(item)}" from the Swap Box?`)) doDelete();
     } else {
-      Alert.alert("Remove listing?", `Remove "${item.name}" from the Swap Box?`, [
+      Alert.alert("Remove listing?", `Remove "${itemLabel(item)}" from the Swap Box?`, [
         { text: "Cancel", style: "cancel" },
         { text: "Remove", style: "destructive", onPress: doDelete },
       ]);
@@ -297,7 +306,7 @@ export default function SwapBox() {
                     </View>
                   ) : null}
                 </View>
-                <Text style={styles.cardName} numberOfLines={1}>{item.name || "Item"}</Text>
+                <Text style={styles.cardName} numberOfLines={1}>{itemLabel(item)}</Text>
                 {tab === "browse" && item.owner_name ? (
                   <Text style={styles.cardOwner} numberOfLines={1}>{item.owner_name}</Text>
                 ) : null}

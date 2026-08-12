@@ -389,6 +389,7 @@ class ItemOut(BaseModel):
     product_url: Optional[str] = None
     favorite: bool = False
     listing_status: Optional[str] = None
+    listing_claimed: bool = False
     times_worn: int = 0
     last_worn_at: Optional[datetime] = None
     price: Optional[float] = None
@@ -1043,8 +1044,9 @@ async def delete_account(current=Depends(get_current_user)):
         db.swap_box.delete_many({"user_id": user_id}),
         db.friends.delete_many({"$or": [{"from_user_id": user_id}, {"to_user_id": user_id}]}),
         db.service_bookings.delete_many({"user_id": user_id}),
-        db.activity_feed.delete_many({"user_id": user_id}),
+        db.activity_feed.delete_many({"$or": [{"user_id": user_id}, {"to_user_id": user_id}]}),
         db.apple_transactions.delete_many({"user_id": user_id}),
+        db.listing_claims.delete_many({"$or": [{"owner_user_id": user_id}, {"claimer_user_id": user_id}]}),
     )
     if email:
         await db.verification_codes.delete_many({"target": email})
@@ -1379,6 +1381,7 @@ def item_doc_to_out(d: Dict[str, Any]) -> ItemOut:
         product_url=d.get("product_url"),
         favorite=d.get("favorite", False),
         listing_status=d.get("listing_status"),
+        listing_claimed=bool(d.get("listing_claimed_by")),
         times_worn=d.get("times_worn", 0),
         last_worn_at=d.get("last_worn_at"),
         price=d.get("price"),
@@ -1680,7 +1683,7 @@ async def create_item(body: CreateItemIn, current=Depends(get_current_user)):
         doc["product_url"] = None
     await db.items.insert_one(doc)
     await award_points(current["user_id"], 10, "item_added")
-    asyncio.create_task(_record_activity(current["user_id"], "item_added", {"item_id": doc["item_id"], "name": name, "category": tags.category}))
+    asyncio.create_task(_record_activity(current["user_id"], "item_added", {"item_id": doc["item_id"], "item_name": name, "category": tags.category}))
     return {"item": item_doc_to_out(doc).model_dump()}
 
 
@@ -1865,7 +1868,7 @@ async def save_outfit(body: SaveOutfitIn, current=Depends(get_current_user)):
     }
     await db.outfits.insert_one(doc)
     await award_points(current["user_id"], 20, "outfit_saved")
-    asyncio.create_task(_record_activity(current["user_id"], "outfit_saved", {"outfit_id": doc["outfit_id"], "title": body.title}))
+    asyncio.create_task(_record_activity(current["user_id"], "outfit_saved", {"outfit_id": doc["outfit_id"], "outfit_title": body.title}))
     return {"outfit": OutfitOut(**doc).model_dump()}
 
 
@@ -2086,6 +2089,9 @@ async def get_points(current=Depends(get_current_user)):
 
 
 # ---------------------- Listings (Donate/Swap) ----------------------
+SWAP_CLAIM_COST = 500  # keep in sync with SWAP_COST in frontend/app/listings.tsx
+
+
 @api.patch("/items/{item_id}/listing")
 async def update_listing(item_id: str, body: ListingUpdateIn, current=Depends(get_current_user)):
     """Set listing_status to 'donate', 'swap', or null to remove."""
@@ -2094,7 +2100,14 @@ async def update_listing(item_id: str, body: ListingUpdateIn, current=Depends(ge
         raise HTTPException(status_code=400, detail="status must be 'donate', 'swap', or null")
     res = await db.items.update_one(
         {"item_id": item_id, "user_id": current["user_id"]},
-        {"$set": {"listing_status": status}},
+        # relisting clears any previous claim, otherwise the item would stay
+        # marked claimed forever with no way for the owner to offer it again
+        {"$set": {
+            "listing_status": status,
+            "listing_claimed_by": None,
+            "listing_claimed_by_name": None,
+            "listing_claimed_at": None,
+        }},
     )
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -2109,7 +2122,12 @@ async def my_listings(current=Depends(get_current_user)):
         {"_id": 0},
     ).sort("created_at", -1)
     docs = await cursor.to_list(200)
-    return {"items": [item_doc_to_out(d).model_dump() for d in docs]}
+    result = []
+    for d in docs:
+        entry = item_doc_to_out(d).model_dump()
+        entry["claimed_by_name"] = d.get("listing_claimed_by_name")
+        result.append(entry)
+    return {"items": result}
 
 
 @api.get("/items/listings/community")
@@ -2130,8 +2148,89 @@ async def community_listings(current=Depends(get_current_user)):
         entry["image_base64"] = ""
         entry["image_url"] = None
         entry["owner_name"] = owner_name
+        entry["claimed_by_me"] = d.get("listing_claimed_by") == current["user_id"]
+        entry["points_cost"] = 0 if d.get("listing_status") == "donate" else SWAP_CLAIM_COST
         result.append(entry)
     return {"items": result}
+
+
+@api.post("/items/listings/{item_id}/claim")
+async def claim_listing(item_id: str, current=Depends(get_current_user)):
+    """Claim another user's donate/swap listing.
+
+    Reserves the item so nobody else can claim it, charges points for a swap
+    (donations are free), records the claim, and notifies the owner.
+    """
+    user_id = current["user_id"]
+    item = await db.items.find_one({"item_id": item_id}, {"_id": 0, "image_base64": 0})
+    if not item or item.get("listing_status") not in ("donate", "swap"):
+        raise HTTPException(status_code=404, detail="This listing is no longer available.")
+    if item["user_id"] == user_id:
+        raise HTTPException(status_code=400, detail="This is your own listing.")
+    if item.get("listing_claimed_by"):
+        raise HTTPException(status_code=409, detail="Someone already claimed this item.")
+
+    cost = 0 if item["listing_status"] == "donate" else SWAP_CLAIM_COST
+    claimer_name = ((current.get("name") or "").split() or ["Someone"])[0]
+    claimed_at = utcnow()
+
+    reserved = await db.items.find_one_and_update(
+        {"item_id": item_id, "listing_status": {"$in": ["donate", "swap"]}, "listing_claimed_by": None},
+        {"$set": {
+            "listing_claimed_by": user_id,
+            "listing_claimed_by_name": claimer_name,
+            "listing_claimed_at": claimed_at,
+        }},
+    )
+    if not reserved:
+        raise HTTPException(status_code=409, detail="Someone already claimed this item.")
+
+    points_remaining = current.get("points") or 0
+    if cost:
+        paid = await db.users.find_one_and_update(
+            {"user_id": user_id, "points": {"$gte": cost}},
+            {"$inc": {"points": -cost}},
+            return_document=True,
+            projection={"points": 1},
+        )
+        if not paid:
+            await db.items.update_one(
+                {"item_id": item_id},
+                {"$set": {"listing_claimed_by": None, "listing_claimed_by_name": None, "listing_claimed_at": None}},
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=f"You need {cost} pts to claim this swap. You have {points_remaining} pts.",
+            )
+        points_remaining = paid.get("points", 0)
+
+    claim_id = "clm_" + uuid.uuid4().hex[:16]
+    await db.listing_claims.insert_one({
+        "claim_id": claim_id,
+        "item_id": item_id,
+        "item_name": item.get("name", ""),
+        "listing_type": item["listing_status"],
+        "owner_user_id": item["user_id"],
+        "claimer_user_id": user_id,
+        "points_spent": cost,
+        "created_at": claimed_at,
+    })
+    owner = await db.users.find_one({"user_id": item["user_id"]}, {"name": 1, "_id": 0})
+    owner_name = (((owner or {}).get("name") or "").split() or ["The owner"])[0]
+    await _record_activity(
+        user_id,
+        "listing_claimed",
+        {"item_name": item.get("name", ""), "listing_type": item["listing_status"], "item_id": item_id},
+        to_user_id=item["user_id"],
+    )
+    return {
+        "ok": True,
+        "claim_id": claim_id,
+        "name": item.get("name", ""),
+        "owner_name": owner_name,
+        "points_spent": cost,
+        "points_remaining": points_remaining,
+    }
 
 
 # ---------------------- Store Suggestions ----------------------
@@ -2645,6 +2744,28 @@ class SwapBoxListIn(BaseModel):
     description: str = ""
     points_cost: int = 200
 
+def swap_listing_to_out(d: Dict[str, Any]) -> Dict[str, Any]:
+    """Serialize a swap_box document for clients.
+
+    The stored field is `item_name`, but every other item surface in the API calls
+    it `name` — returning the raw document made clients render an empty title.
+    """
+    return {
+        "swap_box_id": d["swap_box_id"],
+        "user_id": d.get("user_id"),
+        "owner_name": d.get("owner_name") or "",
+        "item_id": d.get("item_id"),
+        "name": d.get("item_name") or "",
+        "image_url": d.get("image_url") or "",
+        "tags": d.get("tags") or {},
+        "description": d.get("description") or "",
+        "points_cost": d.get("points_cost", 0),
+        "status": d.get("status", "available"),
+        "claimed_at": d.get("claimed_at"),
+        "created_at": d.get("created_at"),
+    }
+
+
 @api.post("/swapbox")
 async def swapbox_list(body: SwapBoxListIn, current=Depends(get_current_user)):
     user_id = current["user_id"]
@@ -2681,13 +2802,13 @@ async def swapbox_browse(current=Depends(get_current_user)):
     user_id = current["user_id"]
     cursor = db.swap_box.find({"status": "available", "user_id": {"$ne": user_id}}, {"_id": 0}).sort("created_at", -1)
     listings = await cursor.to_list(100)
-    return {"items": listings}
+    return {"items": [swap_listing_to_out(d) for d in listings]}
 
 @api.get("/swapbox/mine")
 async def swapbox_mine(current=Depends(get_current_user)):
     cursor = db.swap_box.find({"user_id": current["user_id"]}, {"_id": 0}).sort("created_at", -1)
     listings = await cursor.to_list(50)
-    return {"items": listings}
+    return {"items": [swap_listing_to_out(d) for d in listings]}
 
 @api.post("/swapbox/{swap_box_id}/claim")
 async def swapbox_claim(swap_box_id: str, current=Depends(get_current_user)):
@@ -2699,14 +2820,41 @@ async def swapbox_claim(swap_box_id: str, current=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Already claimed")
     if listing["user_id"] == user_id:
         raise HTTPException(status_code=400, detail="Cannot claim own listing")
-    user = await db.users.find_one({"user_id": user_id}, {"points": 1, "_id": 0})
     cost = listing["points_cost"]
-    current_pts = user.get("points") or 0
-    if current_pts < cost:
-        raise HTTPException(status_code=400, detail=f"Need {cost} points")
-    await db.users.update_one({"user_id": user_id}, {"$inc": {"points": -cost}})
-    await db.swap_box.update_one({"swap_box_id": swap_box_id}, {"$set": {"status": "claimed", "claimed_by": user_id, "claimed_at": utcnow()}})
-    return {"ok": True, "points_spent": cost, "points_remaining": current_pts - cost}
+    # Reserve the listing first so two people can't claim it; points are only taken
+    # once the reservation is ours, and are given back if the reservation is undone.
+    reserved = await db.swap_box.find_one_and_update(
+        {"swap_box_id": swap_box_id, "status": "available"},
+        {"$set": {"status": "claimed", "claimed_by": user_id, "claimed_at": utcnow()}},
+    )
+    if not reserved:
+        raise HTTPException(status_code=409, detail="Someone already claimed this item.")
+    paid = await db.users.find_one_and_update(
+        {"user_id": user_id, "points": {"$gte": cost}},
+        {"$inc": {"points": -cost}},
+        return_document=True,
+        projection={"points": 1},
+    )
+    if not paid:
+        await db.swap_box.update_one(
+            {"swap_box_id": swap_box_id},
+            {"$set": {"status": "available", "claimed_by": None, "claimed_at": None}},
+        )
+        have = current.get("points") or 0
+        raise HTTPException(status_code=400, detail=f"You need {cost} pts to claim this item. You have {have} pts.")
+    await _record_activity(
+        user_id,
+        "swap_claimed",
+        {"item_name": listing.get("item_name", ""), "swap_box_id": swap_box_id},
+        to_user_id=listing["user_id"],
+    )
+    return {
+        "ok": True,
+        "points_spent": cost,
+        "points_remaining": paid.get("points", 0),
+        "owner_name": listing.get("owner_name") or "The owner",
+        "name": listing.get("item_name", ""),
+    }
 
 @api.delete("/swapbox/{swap_box_id}")
 async def swapbox_remove(swap_box_id: str, current=Depends(get_current_user)):
@@ -3192,21 +3340,26 @@ async def activity_feed(current=Depends(get_current_user)):
     for r in accepted:
         fid = r["to_user_id"] if r["from_user_id"] == user_id else r["from_user_id"]
         friend_ids.append(fid)
-    if not friend_ids:
-        return {"events": []}
-    # Get activity events for friends
-    events_cursor = db.activity_feed.find({"user_id": {"$in": friend_ids}}, {"_id": 0}).sort("created_at", -1)
+    # Friends' public events, plus events addressed to this user (e.g. someone
+    # claimed their listing) — a directed event is only ever shown to its target.
+    clauses: List[Dict[str, Any]] = [{"to_user_id": user_id}]
+    if friend_ids:
+        clauses.append({"user_id": {"$in": friend_ids}, "to_user_id": None})
+    events_cursor = db.activity_feed.find({"$or": clauses}, {"_id": 0}).sort("created_at", -1)
     events = await events_cursor.to_list(50)
     return {"events": events}
 
 
-async def _record_activity(user_id: str, event_type: str, data: dict):
+async def _record_activity(user_id: str, event_type: str, data: dict, to_user_id: Optional[str] = None):
+    """Record an activity event. With `to_user_id` the event is a direct
+    notification for that user instead of a public event for the actor's friends."""
     user = await db.users.find_one({"user_id": user_id}, {"name": 1, "_id": 0})
     await db.activity_feed.insert_one({
         "activity_id": "act_" + uuid.uuid4().hex[:12],
         "user_id": user_id,
-        "user_name": (user.get("name") or "").split()[0],
+        "user_name": ((user.get("name") or "").split() or [""])[0],
         "event_type": event_type,
+        "to_user_id": to_user_id,
         "data": data,
         "created_at": utcnow(),
     })
@@ -3295,6 +3448,8 @@ async def startup():
         await db.swap_box.create_index([("status", 1), ("created_at", -1)])
         await db.swap_box.create_index("item_id")
         await db.friends.create_index([("from_user_id", 1), ("to_user_id", 1)])
+        await db.listing_claims.create_index("item_id")
+        await db.listing_claims.create_index([("claimer_user_id", 1), ("created_at", -1)])
         await db.service_bookings.create_index([("user_id", 1), ("created_at", -1)])
         await db.activity_feed.create_index([("user_id", 1), ("created_at", -1)])
         logger.info("Wardrobe API ready")
