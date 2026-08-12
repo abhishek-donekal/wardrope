@@ -25,7 +25,9 @@ Definitions live in `C:\Users\vamsh\.claude\agents\appreview-*.md`.
 ## Loop
 
 1. **Detect** — the persistent monitor polls `asc review status --app 6779038156` every 30 min and fires on state change.
-2. **On `REJECTED`** — dispatch `appreview-analyst`, then follow the pipeline above. Raw commands for reference:
+2. **On `REJECTED` — GET THE VERBATIM REVIEWER TEXT FIRST. Non-negotiable.**
+   The App Store Connect **API does not expose Resolution Center message text.** `asc review status/doctor/validate` return submission *state* and metadata checks only. On 2026-08-12 the pipeline diagnosed a rejection from that output alone and got it **completely wrong** — it concluded a Stylist bug, while Apple had actually written *"provide a demo account… pre-populated content… friends, items to swap, community features and activity feed."* Acting on the wrong diagnosis wasted a cycle and one "fix" (hiding listings) made the real problem worse.
+   **So: ask the user to paste the Resolution Center message before diagnosing.** If it isn't available, say the diagnosis is unverified and act only on what is directly observable. Then follow the pipeline above. Raw commands for reference:
    ```bash
    asc review submissions-list --app 6779038156
    asc review status --app 6779038156 --pretty
