@@ -15,7 +15,7 @@
 | 2.3.10 screenshots — iOS status bar | ✅ fixed (all 7 product shots verified) |
 | 5.1.1(iv) camera/photo purpose strings | ✅ specific wording now in Info.plist (ships in binary) |
 | 5.1.1(v) account deletion | ✅ in-app row + DELETE endpoint, live-tested end-to-end today |
-| AI Stylist error reviewer saw | ✅ fixed + live-verified (real outfits) |
+| AI Stylist error reviewer saw | ⚠️ build 17's fix was incomplete — see "Build 17 rejection" below |
 | AI tagging (silently broken) | ✅ fixed (same retired-model root cause) |
 | Terms of Use mentioned paid plans + Square | ✅ gated off iOS (was a 2.1(b)/3.1.1 reference risk) |
 | Services screens = empty shells + dev-facing "configure API key" text | ✅ hidden until Places key exists; banner reworded |
@@ -34,6 +34,19 @@
 - buy-points balance bug + subscription "Manage" crash fixed (web).
 - Backend + web redeployed to production.
 
+## Build 17 rejection → fixed 2026-08-12 (next build)
+- **Stylist/lookbook/suggestions failed ~50% of the time.** `claude-sonnet-5` returns an extended-thinking
+  block first, so `msg.content[0].text` raised, the exception was swallowed, and the user got
+  "Stylist is taking a break" with HTTP 200 — invisible to monitoring, which is why one manual check passed.
+  `backend/server.py` now extracts text block-type-aware (`_message_text`) and a failed Claude call raises
+  `ClaudeUnavailable` → HTTP 503 instead of a fake success. Verified 30/30 stylist runs (n=4 and n=6) and
+  10/10 lookbook recreates with zero failures.
+- **Demo closet was four grey `placehold.co` boxes.** Reseeded with 11 real garment photographs stored in our
+  own S3 bucket plus 3 saved looks — reproducible via `backend/seed_review_account.py`
+  (`python seed_review_account.py --verify` re-checks every image URL).
+- **Saved looks / lookbook recreate / listings thumbnails were base64-only**, so S3-hosted items rendered blank.
+  All now fall back to `image_url`.
+
 ## YOUR STEPS in App Store Connect (in order)
 
 ### 1. Version page cleanup (critical — this caused rejection #3)
@@ -49,7 +62,7 @@
 - Add the 2 iPad screenshots `ipad-1-closet.png` + `ipad-2-stylist.png` (2048×2732) if not present.
 
 ### 4. App Review Information
-- Sign-in: `applereview@wardrobe-demo.com` / `Review2026!Wardrobe` (LOGIN, not sign-up; account now has 4 seeded closet items so AI features demo instantly).
+- Sign-in: `applereview@wardrobe-demo.com` / `Review2026!Wardrobe` (LOGIN, not sign-up; account now has 11 photographed closet items and 3 saved looks so AI features demo instantly).
 - Notes: paste the reply below (also goes in the Resolution Center thread).
 
 ### 5. Reply in the rejection thread + Resubmit
@@ -80,10 +93,11 @@ Demo account (please LOG IN rather than creating an account):
   Email: applereview@wardrobe-demo.com
   Password: Review2026!Wardrobe
 
-Suggested test flow: log in → Closet tab (4 items) → Stylist tab → request
+Suggested test flow: log in → Closet tab (11 items) → Stylist tab → request
 an outfit ("a smart casual dinner outfit") → outfits are generated from the
-closet items. Adding a new item via Profile → "Catalog a new item"
-demonstrates AI tagging.
+closet items. Looks tab → Saved shows three looks already saved to the
+account. Adding a new item via Profile → "Catalog a new item" demonstrates
+AI tagging.
 
 Thank you for your time and guidance.
 ```

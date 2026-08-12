@@ -95,9 +95,9 @@ export default function Stylist() {
       };
       setMessages((m) => [...m, assistant]);
     } catch (e: any) {
-      const errMsg = e?.message || "";
-      const friendlyMsg = errMsg.includes("429") || errMsg.toLowerCase().includes("rate")
-        ? "You've been styling a lot! Give me a moment — try again in a minute."
+      const errMsg: string = e?.message || "";
+      const friendlyMsg = e?.status === 429
+        ? errMsg || "You've been styling a lot! Give me a moment — try again in a minute."
         : errMsg.includes("closet") || errMsg.includes("empty")
         ? "Your closet is empty. Add some items first and I'll style them for you."
         : "The stylist is taking a short break. Please try again in a moment.";
@@ -112,17 +112,15 @@ export default function Stylist() {
   };
 
   const saveOutfit = async (o: Outfit) => {
-    try {
-      await api("/outfits", {
-        method: "POST",
-        body: {
-          title: o.title,
-          description: o.description,
-          item_ids: o.item_ids,
-          occasion: o.vibe || "",
-        },
-      });
-    } catch {}
+    await api("/outfits", {
+      method: "POST",
+      body: {
+        title: o.title,
+        description: o.description,
+        item_ids: o.item_ids,
+        occasion: o.vibe || "",
+      },
+    });
   };
 
   return (
@@ -227,9 +225,11 @@ function OutfitCard({
 }: {
   outfit: Outfit;
   items: Record<string, Item>;
-  onSave: () => void;
+  onSave: () => Promise<void>;
 }) {
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const pieces = outfit.item_ids.map((id) => items[id]).filter(Boolean);
   return (
     <View style={styles.outfitCard} testID="stylist-outfit-card">
@@ -255,15 +255,31 @@ function OutfitCard({
       <TouchableOpacity
         testID="stylist-save-outfit"
         style={styles.saveBtn}
-        onPress={() => {
-          if (saved) return;
-          onSave();
-          setSaved(true);
+        disabled={saved || saving}
+        onPress={async () => {
+          if (saved || saving) return;
+          setSaving(true);
+          setSaveError(null);
+          try {
+            await onSave();
+            setSaved(true);
+          } catch (e: any) {
+            setSaveError(e?.message || "Couldn't save that look. Try again.");
+          } finally {
+            setSaving(false);
+          }
         }}
       >
-        <Ionicons name={saved ? "bookmark" : "bookmark-outline"} size={14} color={saved ? colors.accent : colors.text} />
-        <Text style={[styles.saveBtnText, saved && { color: colors.accent }]}>{saved ? "Saved" : "Save look"}</Text>
+        {saving ? (
+          <ActivityIndicator color={colors.accent} size="small" />
+        ) : (
+          <>
+            <Ionicons name={saved ? "bookmark" : "bookmark-outline"} size={14} color={saved ? colors.accent : colors.text} />
+            <Text style={[styles.saveBtnText, saved && { color: colors.accent }]}>{saved ? "Saved" : "Save look"}</Text>
+          </>
+        )}
       </TouchableOpacity>
+      {saveError ? <Text style={styles.saveError}>{saveError}</Text> : null}
     </View>
   );
 }
@@ -342,4 +358,5 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   saveBtnText: { color: colors.text, fontSize: 12, letterSpacing: 0.5 },
+  saveError: { color: colors.textSecondary, fontSize: 11, lineHeight: 15, marginTop: 6 },
 });

@@ -26,11 +26,17 @@ type ListingItem = {
   item_id: string;
   name: string;
   image_base64: string;
+  image_url?: string | null;
   tags: any;
   listing_status: string;
   brand?: string | null;
   owner_name?: string;
 };
+
+/** Items uploaded to S3 carry image_url and no base64; the community view carries neither. */
+function listingImageUri(it: ListingItem): string | undefined {
+  return it.image_url || (it.image_base64 ? `data:image/jpeg;base64,${it.image_base64}` : undefined);
+}
 
 export default function Listings() {
   const router = useRouter();
@@ -184,17 +190,16 @@ export default function Listings() {
           columnWrapperStyle={{ gap: 12 }}
           ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
           refreshControl={<RefreshControl tintColor={colors.accent} refreshing={refreshing} onRefresh={onRefresh} />}
-          renderItem={({ item }) => (
+          renderItem={({ item }) => {
+            const imageUri = listingImageUri(item);
+            return (
             <TouchableOpacity
               style={styles.card}
               onPress={tab === "mine" ? () => router.push(`/item/${item.item_id}`) : undefined}
               activeOpacity={tab === "mine" ? 0.7 : 1}
             >
-              {item.image_base64 ? (
-                <Image
-                  source={{ uri: `data:image/jpeg;base64,${item.image_base64}` }}
-                  style={styles.cardImg}
-                />
+              {imageUri ? (
+                <Image source={{ uri: imageUri }} style={styles.cardImg} />
               ) : (
                 <View style={[styles.cardImg, styles.cardImgPlaceholder]}>
                   <Ionicons name="shirt-outline" size={32} color={colors.textSecondary} />
@@ -228,7 +233,8 @@ export default function Listings() {
                 ) : null}
               </View>
             </TouchableOpacity>
-          )}
+            );
+          }}
         />
       )}
     </SafeAreaView>

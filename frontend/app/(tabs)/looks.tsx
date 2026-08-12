@@ -42,7 +42,13 @@ type Outfit = {
 type Item = {
   item_id: string;
   image_base64: string;
+  image_url?: string;
 };
+
+/** Items uploaded to S3 carry image_url and no base64 — fall back so thumbs never render blank. */
+function itemImageUri(it: Item): string | undefined {
+  return it.image_url || (it.image_base64 ? `data:image/jpeg;base64,${it.image_base64}` : undefined);
+}
 
 export default function Looks() {
   const router = useRouter();
@@ -52,6 +58,7 @@ export default function Looks() {
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [items, setItems] = useState<Record<string, Item>>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -65,8 +72,10 @@ export default function Looks() {
       const map: Record<string, Item> = {};
       (it.items || []).forEach((i) => (map[i.item_id] = i));
       setItems(map);
-    } catch {
-      // keep whatever was loaded before, don't crash the screen
+      setError(null);
+    } catch (e: any) {
+      // keep whatever was loaded before, but say so rather than showing a blank tab
+      setError(e?.message || "Couldn't load your looks. Tap to retry.");
     } finally {
       setLoading(false);
     }
@@ -115,6 +124,12 @@ export default function Looks() {
         </View>
       ) : tab === "trends" ? (
         <ScrollView contentContainerStyle={[styles.scroll, isTablet && { paddingHorizontal: space.lg + sidePad }]} showsVerticalScrollIndicator={false}>
+          {error ? (
+            <TouchableOpacity style={styles.errorBox} onPress={load} testID="looks-error">
+              <Text style={[type.bodySm, { textAlign: "center" }]}>{error}</Text>
+              <Text style={[type.overline, { color: colors.accent, marginTop: 8 }]}>Tap to retry</Text>
+            </TouchableOpacity>
+          ) : null}
           {lookbooks.map((lb) => (
             <TouchableOpacity
               key={lb.lookbook_id}
@@ -144,7 +159,13 @@ export default function Looks() {
         </ScrollView>
       ) : (
         <ScrollView contentContainerStyle={[styles.scroll, isTablet && { paddingHorizontal: space.lg + sidePad }]} showsVerticalScrollIndicator={false}>
-          {outfits.length === 0 ? (
+          {error ? (
+            <TouchableOpacity style={styles.errorBox} onPress={load} testID="looks-error-saved">
+              <Text style={[type.bodySm, { textAlign: "center" }]}>{error}</Text>
+              <Text style={[type.overline, { color: colors.accent, marginTop: 8 }]}>Tap to retry</Text>
+            </TouchableOpacity>
+          ) : null}
+          {outfits.length === 0 && !error ? (
             <View style={styles.savedEmpty}>
               <Text style={type.overline}>Nothing saved yet</Text>
               <Text style={[type.bodySm, { marginTop: 8 }]}>
@@ -157,14 +178,9 @@ export default function Looks() {
                 <View style={styles.savedThumbs}>
                   {o.item_ids.slice(0, 4).map((id) => {
                     const it = items[id];
-                    if (!it) return null;
-                    return (
-                      <Image
-                        key={id}
-                        source={{ uri: `data:image/jpeg;base64,${it.image_base64}` }}
-                        style={styles.savedThumb}
-                      />
-                    );
+                    const uri = it ? itemImageUri(it) : undefined;
+                    if (!uri) return null;
+                    return <Image key={id} source={{ uri }} style={styles.savedThumb} />;
                   })}
                 </View>
                 <View style={{ padding: 14 }}>
@@ -218,6 +234,13 @@ const styles = StyleSheet.create({
   lookCta: { flexDirection: "row", gap: 8, alignItems: "center", marginTop: space.md },
   lookCtaText: { color: colors.accent, fontSize: 13, fontWeight: "600", letterSpacing: 0.5 },
   savedEmpty: { paddingVertical: space.xxl, alignItems: "center" },
+  errorBox: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bgSecondary,
+    padding: space.lg,
+    alignItems: "center",
+  },
   savedCard: {
     borderWidth: 1,
     borderColor: colors.border,

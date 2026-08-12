@@ -27,7 +27,12 @@ type Lookbook = {
   credit: string;
 };
 
-type Item = { item_id: string; name: string; image_base64: string; tags: any };
+type Item = { item_id: string; name: string; image_base64: string; image_url?: string; tags: any };
+
+/** Items uploaded to S3 carry image_url and no base64 — fall back so thumbs never render blank. */
+function itemImageUri(it: Item): string | undefined {
+  return it.image_url || (it.image_base64 ? `data:image/jpeg;base64,${it.image_base64}` : undefined);
+}
 
 export default function LookbookDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -133,10 +138,7 @@ export default function LookbookDetail() {
               <View style={styles.itemsRow}>
                 {recreated.items.map((it) => (
                   <View key={it.item_id} style={styles.itemThumbWrap}>
-                    <Image
-                      source={{ uri: `data:image/jpeg;base64,${it.image_base64}` }}
-                      style={styles.itemThumb}
-                    />
+                    <Image source={{ uri: itemImageUri(it) }} style={styles.itemThumb} />
                     <Text numberOfLines={2} style={styles.itemThumbLabel}>{it.name}</Text>
                   </View>
                 ))}

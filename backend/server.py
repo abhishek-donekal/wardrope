@@ -51,8 +51,9 @@ JWT_EXPIRES_DAYS = int(os.environ.get("JWT_EXPIRES_DAYS", "30"))
 AI_FAST_MODEL = "claude-haiku-4-5"   # vision + fast tagging
 AI_SMART_MODEL = "claude-sonnet-5"   # stylist, suggestions, lookbook
 
-# App URL
-APP_URL = os.environ.get("APP_URL", "https://wardrope-red.vercel.app")
+# App URL — set below via _clean_env; a BOM from the env tooling would corrupt every
+# referral and redirect URL we hand out.
+APP_URL = "https://whatsinmywardrobe.com"
 
 # Twilio Verify (email + SMS OTP)
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
@@ -74,6 +75,7 @@ S3_REGION = _clean_env("S3_REGION", "us-east-1")
 # API keys go into HTTP auth headers — a BOM there raises UnicodeEncodeError in httpx.
 ANTHROPIC_API_KEY = _clean_env("ANTHROPIC_API_KEY")
 GOOGLE_PLACES_API_KEY = _clean_env("GOOGLE_PLACES_API_KEY")
+APP_URL = _clean_env("APP_URL", APP_URL)
 
 # Plan amounts in cents
 PLAN_AMOUNTS_CENTS: Dict[str, int] = {
@@ -1126,28 +1128,78 @@ FASHION_PERSONAS: Dict[str, Dict[str, str]] = {
 }
 
 
+class ClaudeUnavailable(RuntimeError):
+    """The Claude call itself failed — transport, auth, quota, or an API error.
+
+    Distinct from the model answering with no usable text. Callers must surface this
+    rather than pass it off to the user as an ordinary empty result.
+    """
+
+
+def _block_type(block: Any) -> str:
+    return str((block.get("type") if isinstance(block, dict) else getattr(block, "type", None)) or "unknown")
+
+
+def _message_text(msg: Any) -> str:
+    """Join the text blocks of an Anthropic message.
+
+    `content[0]` is not necessarily the answer: extended-thinking models emit a
+    `thinking` (or `redacted_thinking`) block first, and tool/server blocks can be
+    interleaved. Take every block whose type is `text`, skip the rest. Blocks are SDK
+    objects but may arrive as plain dicts (raw or replayed payloads), so handle both.
+    """
+    parts: List[str] = []
+    for block in (getattr(msg, "content", None) or []):
+        btype = _block_type(block)
+        if btype != "text":
+            continue
+        text = block.get("text") if isinstance(block, dict) else getattr(block, "text", None)
+        if isinstance(text, str) and text.strip():
+            parts.append(text)
+    return "\n".join(parts).strip()
+
+
+def _log_empty_completion(label: str, model: str, msg: Any) -> None:
+    logger.error(
+        "%s returned no text block (model=%s, stop_reason=%s, blocks=%s)",
+        label,
+        model,
+        getattr(msg, "stop_reason", None),
+        [_block_type(b) for b in (getattr(msg, "content", None) or [])],
+    )
+
+
 async def _claude_text(system: str, user: str, model: str = None, max_tokens: int = 2000) -> str:
-    """Call Claude text API. Returns empty string on any error."""
+    """Call Claude text API. Returns the model's text, or "" if it produced none.
+
+    Raises ClaudeUnavailable when the call fails.
+    """
+    used_model = model or AI_SMART_MODEL
     if not ANTHROPIC_API_KEY:
-        return ""
+        raise ClaudeUnavailable("ANTHROPIC_API_KEY is not configured")
     try:
         cli = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
-        msg = await cli.messages.create(
-            model=model or AI_SMART_MODEL,
-            max_tokens=max_tokens,
-            system=system,
-            messages=[{"role": "user", "content": user}],
-        )
-        return msg.content[0].text if msg.content else ""
+        kwargs: Dict[str, Any] = {
+            "model": used_model,
+            "max_tokens": max_tokens,
+            "messages": [{"role": "user", "content": user}],
+        }
+        if system:
+            kwargs["system"] = system
+        msg = await cli.messages.create(**kwargs)
     except Exception as e:
-        logger.error(f"Claude text error: {e}")
-        return ""
+        logger.exception(f"Claude text call failed (model={used_model}): {e}")
+        raise ClaudeUnavailable(str(e)) from e
+    text = _message_text(msg)
+    if not text:
+        _log_empty_completion("Claude text", used_model, msg)
+    return text
 
 
 async def _claude_vision(system: str, image_b64: str, text: str, max_tokens: int = 600) -> str:
-    """Call Claude with base64 image + text. Returns empty string on error."""
+    """Call Claude with base64 image + text. Raises ClaudeUnavailable when the call fails."""
     if not ANTHROPIC_API_KEY:
-        return ""
+        raise ClaudeUnavailable("ANTHROPIC_API_KEY is not configured")
     try:
         cli = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
         msg = await cli.messages.create(
@@ -1169,16 +1221,19 @@ async def _claude_vision(system: str, image_b64: str, text: str, max_tokens: int
                 ],
             }],
         )
-        return msg.content[0].text if msg.content else ""
     except Exception as e:
-        logger.error(f"Claude vision error: {e}")
-        return ""
+        logger.exception(f"Claude vision call failed (model={AI_FAST_MODEL}): {e}")
+        raise ClaudeUnavailable(str(e)) from e
+    out = _message_text(msg)
+    if not out:
+        _log_empty_completion("Claude vision", AI_FAST_MODEL, msg)
+    return out
 
 
 async def _claude_vision_url(system: str, image_url: str, text: str, max_tokens: int = 600) -> str:
-    """Call Claude with an image URL + text. Returns empty string on error."""
+    """Call Claude with an image URL + text. Raises ClaudeUnavailable when the call fails."""
     if not ANTHROPIC_API_KEY:
-        return ""
+        raise ClaudeUnavailable("ANTHROPIC_API_KEY is not configured")
     try:
         cli = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
         msg = await cli.messages.create(
@@ -1199,10 +1254,13 @@ async def _claude_vision_url(system: str, image_url: str, text: str, max_tokens:
                 ],
             }],
         )
-        return msg.content[0].text if msg.content else ""
     except Exception as e:
-        logger.error(f"Claude vision URL error: {e}")
-        return ""
+        logger.exception(f"Claude vision URL call failed (model={AI_FAST_MODEL}): {e}")
+        raise ClaudeUnavailable(str(e)) from e
+    out = _message_text(msg)
+    if not out:
+        _log_empty_completion("Claude vision URL", AI_FAST_MODEL, msg)
+    return out
 
 
 # ---------------------- AI helpers ----------------------
@@ -1267,19 +1325,31 @@ def _parse_tag_data(data: Optional[Dict[str, Any]]) -> ItemTags:
 
 
 async def ai_tag_item(image_base64: str) -> ItemTags:
-    if not ANTHROPIC_API_KEY:
+    """Best-effort tags for a garment we are saving regardless — never blocks the save."""
+    try:
+        raw = await _claude_vision(_TAG_SYS_PROMPT, _strip_data_url(image_base64), _TAG_SCHEMA_HINT, max_tokens=600)
+    except ClaudeUnavailable:
         return ItemTags(description="Untagged item")
-    raw = await _claude_vision(_TAG_SYS_PROMPT, _strip_data_url(image_base64), _TAG_SCHEMA_HINT, max_tokens=600)
     return _parse_tag_data(_safe_json_loads(raw) if raw else None)
 
 
 async def _tag_item_from_url(image_url: str) -> Dict[str, Any]:
     """Tag a garment from an image URL. Returns a dict (not ItemTags) for camera roll usage."""
-    if not ANTHROPIC_API_KEY:
+    try:
+        raw = await _claude_vision_url(_TAG_SYS_PROMPT, image_url, _TAG_SCHEMA_HINT, max_tokens=600)
+    except ClaudeUnavailable:
         return {"category": "Item", "description": "Untagged item"}
-    raw = await _claude_vision_url(_TAG_SYS_PROMPT, image_url, _TAG_SCHEMA_HINT, max_tokens=600)
     data = _safe_json_loads(raw) if raw else None
     return data or {"category": "Item", "description": "Untagged item"}
+
+
+async def _tags_from_url(image_url: str) -> ItemTags:
+    """Best-effort tags from an image URL for a garment we are saving regardless."""
+    try:
+        raw = await _claude_vision_url(_TAG_SYS_PROMPT, image_url, _TAG_SCHEMA_HINT, max_tokens=600)
+    except ClaudeUnavailable:
+        return ItemTags(description="Untagged item")
+    return _parse_tag_data(_safe_json_loads(raw) if raw else None)
 
 
 def closet_doc_to_out(doc: dict, item_count: int = 0) -> ClosetOut:
@@ -1322,14 +1392,18 @@ def item_doc_to_out(d: Dict[str, Any]) -> ItemOut:
 async def ai_tag_endpoint(body: TagRequest, current=Depends(get_current_user)):
     if not _check_rate(current["user_id"], "tag", max_calls=30):
         raise HTTPException(status_code=429, detail="Too many tagging requests. Try again in an hour.")
-    if body.image_url:
-        raw = await _claude_vision_url(_TAG_SYS_PROMPT, body.image_url, _TAG_SCHEMA_HINT, max_tokens=600)
-        tags = _parse_tag_data(_safe_json_loads(raw) if raw else None)
-    elif body.image_base64:
-        tags = await ai_tag_item(body.image_base64)
-    else:
+    if not body.image_url and not body.image_base64:
         raise HTTPException(status_code=400, detail="Either image_base64 or image_url is required")
-    return {"tags": tags.model_dump()}
+    try:
+        if body.image_url:
+            raw = await _claude_vision_url(_TAG_SYS_PROMPT, body.image_url, _TAG_SCHEMA_HINT, max_tokens=600)
+        else:
+            raw = await _claude_vision(
+                _TAG_SYS_PROMPT, _strip_data_url(body.image_base64), _TAG_SCHEMA_HINT, max_tokens=600
+            )
+    except ClaudeUnavailable:
+        raise HTTPException(status_code=503, detail="Auto-tagging is unavailable right now. You can still fill in details yourself.")
+    return {"tags": _parse_tag_data(_safe_json_loads(raw) if raw else None).model_dump()}
 
 
 @api.post("/upload/presign")
@@ -1387,13 +1461,17 @@ async def ai_stylist(body: StylistRequest, current=Depends(get_current_user)):
         f"Compose {body.num_outfits} distinct, inspired outfit ideas. Respond in character. Return JSON only."
     )
 
-    raw = await _claude_text(sys_msg, prompt, max_tokens=2500)
+    try:
+        raw = await _claude_text(sys_msg, prompt, max_tokens=2500)
+    except ClaudeUnavailable:
+        raise HTTPException(status_code=503, detail="The stylist is taking a short break. Please try again in a moment.")
     if not raw:
-        return StylistResponse(message="Stylist is taking a break — try again in a moment.", outfits=[])
+        raise HTTPException(status_code=503, detail="The stylist is taking a short break. Please try again in a moment.")
 
     data = _safe_json_loads(raw)
     if not data:
-        return StylistResponse(message="Couldn't generate looks right now.", outfits=[])
+        logger.error(f"stylist: unparseable model reply (first 300 chars): {raw[:300]}")
+        raise HTTPException(status_code=502, detail="The stylist replied in an unexpected format. Please try again.")
 
     valid_ids = {it["item_id"] for it in items}
     outfits = []
@@ -1485,8 +1563,7 @@ async def barcode_add(body: BarcodeIn, current=Depends(get_current_user)):
     tags = None
     image_url = product.get("image_url")
     if image_url:
-        raw = await _claude_vision_url(_TAG_SYS_PROMPT, image_url, _TAG_SCHEMA_HINT, max_tokens=600)
-        tags = _parse_tag_data(_safe_json_loads(raw) if raw else None)
+        tags = await _tags_from_url(image_url)
     else:
         # Tag from text description when no image
         text_prompt = (
@@ -1497,16 +1574,10 @@ async def barcode_add(body: BarcodeIn, current=Depends(get_current_user)):
             f"{_TAG_SCHEMA_HINT}"
         )
         try:
-            cli = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
-            msg = await cli.messages.create(
-                model=AI_FAST_MODEL,
-                max_tokens=400,
-                messages=[{"role": "user", "content": text_prompt}],
-            )
-            raw = msg.content[0].text if msg.content else None
+            raw = await _claude_text("", text_prompt, model=AI_FAST_MODEL, max_tokens=400)
             tags = _parse_tag_data(_safe_json_loads(raw) if raw else None)
-        except Exception as e:
-            logger.error(f"barcode_add AI tag error: {e}")
+        except ClaudeUnavailable:
+            tags = ItemTags(description="Untagged item")
 
     if tags is None:
         tags = ItemTags()
@@ -1560,8 +1631,7 @@ async def create_item(body: CreateItemIn, current=Depends(get_current_user)):
     if body.tags:
         tags = body.tags
     elif image_url:
-        raw = await _claude_vision_url(_TAG_SYS_PROMPT, image_url, _TAG_SCHEMA_HINT, max_tokens=600)
-        tags = _parse_tag_data(_safe_json_loads(raw) if raw else None)
+        tags = await _tags_from_url(image_url)
     else:
         tags = await ai_tag_item(image_b64)
 
@@ -1925,10 +1995,15 @@ async def recreate_lookbook(lookbook_id: str, current=Depends(get_current_user))
         f"Lookbook: {lb['title']} — {lb['subtitle']}. Vibe: {lb['vibe']}. Tags: {', '.join(lb['tags'])}.\n\n"
         f"Catalog:\n{catalog}\n\nRecreate this look from the catalog. Return JSON only."
     )
-    raw = await _claude_text(sys_msg, prompt, max_tokens=600)
+    try:
+        raw = await _claude_text(sys_msg, prompt, max_tokens=600)
+    except ClaudeUnavailable:
+        raise HTTPException(status_code=503, detail="The stylist is taking a short break. Please try again in a moment.")
     data = _safe_json_loads(raw) if raw else None
     if not data:
-        return {"message": "Couldn't recreate this look right now.", "outfit": None}
+        if raw:
+            logger.error(f"lookbook recreate: unparseable model reply (first 300 chars): {raw[:300]}")
+        raise HTTPException(status_code=503, detail="Couldn't recreate this look right now. Please try again in a moment.")
     valid_ids = {it["item_id"] for it in items}
     ids = [i for i in (data.get("item_ids") or []) if i in valid_ids][:6]
     if not ids:
@@ -2051,7 +2126,9 @@ async def community_listings(current=Depends(get_current_user)):
         owner = await db.users.find_one({"user_id": d.get("user_id")}, {"name": 1})
         owner_name = (owner.get("name") or "").split()[0] if owner else "Someone"
         entry = item_doc_to_out(d).model_dump()
-        entry["image_base64"] = ""  # strip image for community view
+        # strip both image fields for the community view — an S3 URL is still the photo
+        entry["image_base64"] = ""
+        entry["image_url"] = None
         entry["owner_name"] = owner_name
         result.append(entry)
     return {"items": result}
@@ -2153,8 +2230,13 @@ async def get_suggestions(current=Depends(get_current_user)):
         + "\n\nAs yourself, identify 4-5 gaps. Return JSON only."
     )
 
-    raw = await _claude_text(sys_msg, prompt, max_tokens=900)
+    try:
+        raw = await _claude_text(sys_msg, prompt, max_tokens=900)
+    except ClaudeUnavailable:
+        raise HTTPException(status_code=503, detail="Style suggestions are unavailable right now. Please try again in a moment.")
     data = _safe_json_loads(raw) if raw else None
+    if raw and data is None:
+        logger.error(f"suggestions: unparseable model reply (first 300 chars): {raw[:300]}")
     raw_suggestions = (data or {}).get("suggestions") or []
 
     # Build full store search URLs
@@ -2173,7 +2255,7 @@ async def get_suggestions(current=Depends(get_current_user)):
         })
 
     if not final:
-        raise HTTPException(status_code=500, detail="Could not generate suggestions")
+        raise HTTPException(status_code=503, detail="Style suggestions are unavailable right now. Please try again in a moment.")
 
     # Cache in user doc
     await db.users.update_one(

@@ -39,6 +39,7 @@ export default function Shop() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [cached, setCached] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (force = false) => {
     try {
@@ -47,7 +48,10 @@ export default function Shop() {
       );
       setSuggestions(res.suggestions || []);
       setCached(res.cached ?? false);
-    } catch {}
+      setError(null);
+    } catch (e: any) {
+      setError(e?.message || "Couldn't load your suggestions. Pull down to retry.");
+    }
     setLoading(false);
     setRefreshing(false);
   }, []);
@@ -96,6 +100,16 @@ export default function Shop() {
           <Text style={[type.bodySm, styles.intro]}>
             Based on your wardrobe, these are your biggest style gaps. Tap a card to shop the look.
           </Text>
+
+          {error ? (
+            <View style={styles.errorBox} testID="shop-error">
+              <Ionicons name="alert-circle-outline" size={18} color={colors.accent} />
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity style={styles.retryBtn} onPress={refresh} disabled={refreshing}>
+                <Text style={styles.retryBtnText}>Try again</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
 
           {suggestions.map((s, idx) => (
             <View key={idx} style={styles.card}>
@@ -175,6 +189,25 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderRadius: 2,
   },
+  errorBox: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bgSecondary,
+    padding: space.lg,
+    marginBottom: 12,
+    borderRadius: 2,
+    alignItems: "center",
+    gap: 8,
+  },
+  errorText: { color: colors.textSecondary, fontSize: 13, lineHeight: 19, textAlign: "center" },
+  retryBtn: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: 2,
+  },
+  retryBtnText: { color: colors.text, fontSize: 12, letterSpacing: 0.5 },
   cardTop: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: space.sm },
   storeIcon: {
     width: 32,

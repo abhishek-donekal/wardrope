@@ -25,6 +25,16 @@ export type ApiOpts = {
   auth?: boolean;
 };
 
+/** Carries the HTTP status so screens can tell "rate limited" from "server is down". */
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 export async function api<T = any>(path: string, opts: ApiOpts = {}): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (opts.auth !== false) {
@@ -58,7 +68,7 @@ export async function api<T = any>(path: string, opts: ApiOpts = {}): Promise<T>
   }
   if (!res.ok) {
     const msg = data?.detail || `Request failed (${res.status})`;
-    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+    throw new ApiError(typeof msg === "string" ? msg : JSON.stringify(msg), res.status);
   }
   return data as T;
 }
