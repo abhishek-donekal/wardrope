@@ -56,7 +56,10 @@ export default function ItemDetail() {
     setItem({ ...item, favorite: next });
     try {
       await api(`/items/${item.item_id}`, { method: "PUT", body: { favorite: next } });
-    } catch {}
+    } catch {
+      // never leave the heart showing a state the server did not accept
+      setItem((prev) => (prev ? { ...prev, favorite: !next } : prev));
+    }
   };
 
   const onDelete = () => {
